@@ -5,6 +5,10 @@
 #include "curand.h"
 #include "curand_kernel.h"
 
+#include "common.h"
+#include "geometry.h"
+#include "scene.h"
+
 static const unsigned int BLOCK_DIM = 16;
 static const unsigned int RESET_DIM = BLOCK_DIM * BLOCK_DIM;
 
@@ -15,28 +19,99 @@ static float* dev_render_buffer;
 
 static curandState* dev_curand_state;
 
-__global__ void resetRenderKernel(curandState* curand_state, int render_res) {
+__device__ int kernel_render_width, kernel_render_height;
+__device__ float* kernel_render_buffer;
+__device__ curandState* kernel_curand_state;
+
+__device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& normal) {
+
+	float a = direction.magnitude_2();
+	vec3 recentered = start - center;
+	float b = 2 * direction.dot(recentered);
+	float c = recentered.magnitude_2() - (radius * radius);
+
+	float discrim = (b * b) - (4.0f * a * c);
+	if (discrim < 0.0f) return false;
+
+	float sqrt_discrim = std::sqrtf(discrim);
+	float t1 = (-b + sqrt_discrim) / (2.0f * a);
+	float t2 = (-b - sqrt_discrim) / (2.0f * a);
+
+	if (t1 > 0.0f && t2 > 0.0f) {
+		t = std::fminf(t1, t2);
+	} else {
+		t = std::fmaxf(t1, t2);
+	}
+	if (t < 0.0f) return false;
+
+	vec3 surface_point = start + direction * t;
+	normal = (surface_point - center) / radius;
+
+	return true;
+
+}
+
+__global__ void resetRenderKernel(float* render_buffer, curandState* curand_state, int render_width, int render_height) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (t < render_res) {
+	if (t == 0) {
+		kernel_render_width = render_width;
+		kernel_render_height = render_height;
+		kernel_render_buffer = render_buffer;
+		kernel_curand_state = curand_state;
+	}
+
+	if (t < render_width * render_height) {
 		curand_init(t, 0, 0, &curand_state[t]);
 	}
 
 }
 
-__global__ void renderKernel(float* render_buffer, curandState* curand_state, int render_width, int render_height) {
+__global__ void renderKernel() {
 
 	int x = BLOCK_DIM * blockIdx.x + threadIdx.x;
 	int y = BLOCK_DIM * blockIdx.y + threadIdx.y;
 
-	if (x < render_width && y < render_height) {
+	if (x < kernel_render_width && y < kernel_render_height) {
 
-		int t = render_height * x + y;
+		int n = kernel_render_height * x + y;
 
-		render_buffer[render_height * 3 * x + 3 * y + 0] += curand_uniform(&curand_state[t]);
-		render_buffer[render_height * 3 * x + 3 * y + 1] += curand_uniform(&curand_state[t]);
-		render_buffer[render_height * 3 * x + 3 * y + 2] += curand_uniform(&curand_state[t]);
+		vec3 position = {0.0f, 5.0f, 7.0f};
+
+		vec3 lookat = {0.0f, 2.11f, 0.0f};
+		vec3 forward = (lookat - position);
+		forward.normalize();
+		vec3 up = {0.0f, 1.0f, 0.0f};
+		vec3 right = forward.cross(up);
+		right.normalize();
+		up = right.cross(forward);
+
+		camera_t camera = {
+			position,
+			forward,
+			up,
+			right,
+			(float) kernel_render_width / kernel_render_height
+		};
+
+		float screen_x = (float) x / kernel_render_width - 0.5f;
+		float screen_y = (float) y / kernel_render_height - 0.5f;
+		vec3 ray_direction = camera.forward + (camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y);
+		ray_direction.normalize();
+
+		sphere_t sphere = {{1.0f, 2.5f, 0.5f}, 1.5f};
+
+		float t;
+		vec3 normal;
+		float out = 0.0f;
+		if (sphere.intersect(camera.position, ray_direction, t, normal)) {
+			out = 1.0f;
+		}
+
+		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 0] += out;
+		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 1] += out;
+		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 2] += out;
 
 	}
 
@@ -99,7 +174,7 @@ bool resetRender(int width, int height) {
 
 	int blocks = (render_width * render_height + RESET_DIM - 1) / RESET_DIM;
 	int threads_per_block = RESET_DIM;
-	resetRenderKernel<<<blocks, threads_per_block>>>(dev_curand_state, render_width * render_height);
+	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, render_width, render_height);
 	cudaError_t cudaStatus;
 
 	cudaStatus = cudaGetLastError();
@@ -128,7 +203,7 @@ bool render(unsigned char* image_data) {
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	renderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, render_width, render_height);
+	renderKernel<<<blocks, threads_per_block>>>();
 
 	cudaError_t cudaStatus;
 

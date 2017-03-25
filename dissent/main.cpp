@@ -10,7 +10,7 @@
 const int WIDTH = 640;
 const int HEIGHT = 480;
 
-unsigned char image_data[WIDTH][HEIGHT][3];
+unsigned char image_data[HEIGHT][WIDTH][3];
 
 void updateImage(void) {
 

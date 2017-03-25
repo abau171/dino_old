@@ -31,7 +31,6 @@
     <ClInclude Include="scene.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="geometry.cu" />
     <CudaCompile Include="render.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
