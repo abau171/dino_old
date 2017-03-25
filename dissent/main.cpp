@@ -37,10 +37,10 @@ void initScene() {
 	};
 
 	scene.spheres.push_back({{1.0f, 2.5f, 0.5f}, 1.5f});
-	scene.surfaces.push_back({{1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}});
+	scene.surfaces.push_back({0.5f, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
 
 	scene.spheres.push_back({{-1.0f, 1.5f, -1.0f}, 1.0f});
-	scene.surfaces.push_back({{1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});
+	scene.surfaces.push_back({0.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});
 
 }
 

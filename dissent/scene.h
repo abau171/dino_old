@@ -11,7 +11,8 @@ struct camera_t {
 };
 
 struct surface_t {
-	color3 diffuse, emit;
+	float reflectance;
+	color3 diffuse, specular, emit;
 };
 
 struct scene_t {

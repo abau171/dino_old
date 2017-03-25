@@ -132,10 +132,20 @@ __global__ void renderKernel(camera_t camera) {
 			if (best_t < INFINITY) {
 
 				ray_start = (ray_start + ray_direction * best_t) + best_normal * 0.0001f;
-				ray_direction = random_hemi_normal(best_normal, n);
+				if (curand_uniform(&kernel_curand_state[n]) > kernel_surfaces[best_surface].reflectance) {
 
-				final_color += d_product * kernel_surfaces[best_surface].emit;
-				d_product *= kernel_surfaces[best_surface].diffuse;
+					ray_direction = random_hemi_normal(best_normal, n);
+
+					final_color += d_product * kernel_surfaces[best_surface].emit;
+					d_product *= kernel_surfaces[best_surface].diffuse;
+
+				} else {
+
+					ray_direction = ray_direction.reflect(best_normal);
+
+					final_color += d_product * kernel_surfaces[best_surface].emit;
+
+				}
 			}
 
 		}
