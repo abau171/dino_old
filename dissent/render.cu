@@ -58,6 +58,20 @@ __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& 
 
 }
 
+__device__ vec3 random_hemi_normal(vec3 normal, int n) {
+	vec3 hemi;
+	do {
+		hemi.x = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+		hemi.y = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+		hemi.z = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+	} while (hemi.magnitude_2() > 1);
+	hemi.normalize();
+	if (hemi.dot(normal) < 0.0f) {
+		hemi = -hemi;
+	}
+	return hemi;
+}
+
 __global__ void resetRenderKernel(float* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, int num_spheres) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
@@ -85,33 +99,46 @@ __global__ void renderKernel(camera_t camera) {
 
 	if (x < kernel_render_width && y < kernel_render_height) {
 
-		//int n = kernel_render_height * x + y;
+		int n = kernel_render_height * x + y;
 
 		float screen_x = (float) x / kernel_render_width - 0.5f;
 		float screen_y = (float) y / kernel_render_height - 0.5f;
+		vec3 ray_start = camera.position;
 		vec3 ray_direction = camera.forward + (camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y);
 		ray_direction.normalize();
 
 		color3 final_color = {0.0f, 0.0f, 0.0f};
+		color3 d_product = {1.0f, 1.0f, 1.0f};
 
-		float t;
-		vec3 normal;
+		for (int depth = 0; depth < 5; depth++) {
 
-		float best_t = INFINITY;
-		vec3 best_normal;
-		int best_surface;
+			float t;
+			vec3 normal;
 
-		for (int i = 0; i < kernel_num_spheres; i++) {
-			if (kernel_spheres[i].intersect(camera.position, ray_direction, t, normal)) {
-				if (t < best_t) {
-					best_t = t;
-					best_normal = normal;
-					best_surface = i;
+			float best_t = INFINITY;
+			vec3 best_normal;
+			int best_surface;
+
+			for (int i = 0; i < kernel_num_spheres; i++) {
+				if (kernel_spheres[i].intersect(ray_start, ray_direction, t, normal)) {
+					if (t < best_t) {
+						best_t = t;
+						best_normal = normal;
+						best_surface = i;
+					}
 				}
 			}
-		}
 
-		final_color += kernel_surfaces[best_surface].emit;
+			if (best_t < INFINITY) {
+
+				ray_start = (ray_start + ray_direction * best_t) + best_normal * 0.0001f;
+				ray_direction = random_hemi_normal(best_normal, n);
+
+				final_color += d_product * kernel_surfaces[best_surface].emit;
+				d_product *= kernel_surfaces[best_surface].diffuse;
+			}
+
+		}
 
 		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 0] += final_color.r;
 		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 1] += final_color.g;

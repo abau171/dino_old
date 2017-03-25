@@ -46,7 +46,7 @@ struct vec3 {
 	}
 
 	__host__ __device__ vec3 operator/(float scalar) {
-		return {scalar / x, scalar / y, scalar / z};
+		return {x / scalar, y / scalar, z / scalar};
 	}
 
 	__host__ __device__ vec3 operator/=(float scalar) {
@@ -142,7 +142,7 @@ struct color3 {
 	}
 
 	__host__ __device__ color3 operator/(float scalar) {
-		return {scalar / r, scalar / g, scalar / b};
+		return {r / scalar, r / scalar, r / scalar};
 	}
 
 	__host__ __device__ color3 operator/=(float scalar) {

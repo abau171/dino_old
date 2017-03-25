@@ -18,7 +18,7 @@ static scene_t scene;
 
 void initScene() {
 
-	vec3 position = {0.0f, 5.0f, 7.0f};
+	vec3 position = {-5.0f, 3.0f, 1.0f};
 
 	vec3 lookat = {0.0f, 2.11f, 0.0f};
 	vec3 forward = (lookat - position);
