@@ -104,8 +104,8 @@ __global__ void renderKernel(camera_t camera) {
 
 		int n = kernel_render_height * x + y;
 
-		float screen_x = (float) x / kernel_render_width - 0.5f;
-		float screen_y = (float) y / kernel_render_height - 0.5f;
+		float screen_x = (x + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_width - 0.5f;
+		float screen_y = (y + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_height - 0.5f;
 		vec3 ray_start = camera.position;
 		vec3 ray_direction = camera.forward + (camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y);
 		ray_direction.normalize();
@@ -147,6 +147,7 @@ __global__ void renderKernel(camera_t camera) {
 					ray_direction = ray_direction.reflect(best_normal);
 
 					final_color += d_product * kernel_surfaces[best_surface].emit;
+					d_product *= kernel_surfaces[best_surface].specular;
 
 				}
 			} else {
@@ -284,8 +285,7 @@ bool render(unsigned char* image_data, camera_t& camera) {
 	}
 
 	for (int i = 0; i < render_n; i++) {
-		color3 color = render_buffer[i];
-		color /= render_count;
+		color3 color = render_buffer[i] / render_count;
 		color.fix();
 		color *= 256.0f;
 		image_data[3 * i] = fminf(color.r, 255.0f);

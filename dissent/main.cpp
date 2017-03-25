@@ -36,19 +36,22 @@ void initScene() {
 		(float) WIDTH / HEIGHT
 	};
 
-	scene.background_emission = {0.5f, 0.6f, 0.9f};
+	scene.background_emission = {0.7f, 0.9f, 1.4f};
 
 	scene.spheres.push_back({{0.0f, -1000.0f, 0.0f}, 1000.0f});
-	scene.surfaces.push_back({0.0f, {0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
+	scene.surfaces.push_back({0.0f, {0.3f, 0.3f, 0.3f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
 
-	scene.spheres.push_back({{1.0f, 1.5f, 0.5f}, 1.5f});
-	scene.surfaces.push_back({0.3f, {0.8f, 0.4f, 0.2f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
+	scene.spheres.push_back({{2.5f, 1.5f, 0.5f}, 1.5f});
+	scene.surfaces.push_back({0.3f, {0.2f, 0.4f, 0.8f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
 
 	scene.spheres.push_back({{-3.0f, 1.0f, 0.5f}, 1.0f});
 	scene.surfaces.push_back({0.0f, {0.6f, 0.6f, 0.2f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
 
-	scene.spheres.push_back({{-2.0f, 3.0f, -1.0f}, 1.5f});
-	scene.surfaces.push_back({0.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {5.0f, 5.0f, 5.0f}});
+	scene.spheres.push_back({{-0.5f, 0.8f, -1.0f}, 0.8f});
+	scene.surfaces.push_back({0.7f, {0.9f, 0.5f, 0.1f}, {0.9f, 0.5f, 0.1f}, {0.0f, 0.0f, 0.0f}});
+
+	scene.spheres.push_back({{-2.0f, 3.0f, -1.0f}, 1.0f});
+	scene.surfaces.push_back({0.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {8.0f, 8.0f, 8.0f}});
 
 }
 

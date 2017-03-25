@@ -142,7 +142,7 @@ struct color3 {
 	}
 
 	__host__ __device__ color3 operator/(float scalar) {
-		return {r / scalar, r / scalar, r / scalar};
+		return {r / scalar, g / scalar, b / scalar};
 	}
 
 	__host__ __device__ color3 operator/=(float scalar) {
