@@ -5,16 +5,48 @@
 
 #include "common.h"
 #include "geometry.h"
+#include "scene.h"
 #include "render.h"
 
-const int WIDTH = 640;
-const int HEIGHT = 480;
+static const int WIDTH = 640;
+static const int HEIGHT = 480;
 
-unsigned char image_data[HEIGHT][WIDTH][3];
+static unsigned char image_data[HEIGHT][WIDTH][3];
 
-void updateImage(void) {
+static camera_t camera;
+static scene_t scene;
 
-	if (!render((unsigned char*) image_data)) return;
+void initScene() {
+
+	vec3 position = {0.0f, 5.0f, 7.0f};
+
+	vec3 lookat = {0.0f, 2.11f, 0.0f};
+	vec3 forward = (lookat - position);
+	forward.normalize();
+	vec3 up = {0.0f, 1.0f, 0.0f};
+	vec3 right = forward.cross(up);
+	right.normalize();
+	up = right.cross(forward);
+
+	camera = {
+		position,
+		forward,
+		up,
+		right,
+		(float) WIDTH / HEIGHT
+	};
+
+	scene.spheres.push_back({{1.0f, 2.5f, 0.5f}, 1.5f});
+	scene.surfaces.push_back({{1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}});
+
+	scene.spheres.push_back({{-1.0f, 1.5f, -1.0f}, 1.0f});
+	scene.surfaces.push_back({{1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});
+
+}
+
+void updateImage() {
+
+	if (!render((unsigned char*) image_data, camera)) return;
 
 }
 
@@ -30,7 +62,8 @@ void display() {
 
 int main(int argc, char** argv) {
 
-	if (!resetRender(WIDTH, HEIGHT)) return 1;
+	initScene();
+	if (!resetRender(WIDTH, HEIGHT, scene)) return 1;
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
