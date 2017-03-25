@@ -15,16 +15,16 @@ static const unsigned int RESET_DIM = BLOCK_DIM * BLOCK_DIM;
 static int render_width, render_height, render_n;
 static int render_count;
 
-static float* render_buffer;
-static float* dev_render_buffer;
+static color3* render_buffer;
+static color3* dev_render_buffer;
 
 static sphere_t* dev_spheres;
 static surface_t* dev_surfaces;
 
 static curandState* dev_curand_state;
 
-__device__ int kernel_render_width, kernel_render_height;
-__device__ float* kernel_render_buffer;
+__device__ int kernel_render_width, kernel_render_height, kernel_render_n;
+__device__ color3* kernel_render_buffer;
 __device__ int kernel_num_spheres;
 __device__ sphere_t* kernel_spheres;
 __device__ surface_t* kernel_surfaces;
@@ -72,13 +72,14 @@ __device__ vec3 random_hemi_normal(vec3 normal, int n) {
 	return hemi;
 }
 
-__global__ void resetRenderKernel(float* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, int num_spheres) {
+__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, int num_spheres) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (t == 0) {
 		kernel_render_width = render_width;
 		kernel_render_height = render_height;
+		kernel_render_n = render_width * render_height;
 		kernel_render_buffer = render_buffer;
 		kernel_num_spheres = num_spheres;
 		kernel_spheres = spheres;
@@ -86,7 +87,7 @@ __global__ void resetRenderKernel(float* render_buffer, curandState* curand_stat
 		kernel_curand_state = curand_state;
 	}
 
-	if (t < render_width * render_height) {
+	if (t < kernel_render_n) {
 		curand_init(t, 0, 0, &curand_state[t]);
 	}
 
@@ -150,9 +151,7 @@ __global__ void renderKernel(camera_t camera) {
 
 		}
 
-		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 0] += final_color.r;
-		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 1] += final_color.g;
-		kernel_render_buffer[kernel_render_width * 3 * y + 3 * x + 2] += final_color.b;
+		kernel_render_buffer[kernel_render_width * y + x] += final_color;
 
 	}
 
@@ -160,7 +159,7 @@ __global__ void renderKernel(camera_t camera) {
 
 bool clearRenderBuffer() {
 
-	if (cudaMemset(dev_render_buffer, 0, render_n * sizeof(float)) != cudaSuccess) {
+	if (cudaMemset(dev_render_buffer, 0, render_n * sizeof(color3)) != cudaSuccess) {
 		std::cout << "Cannot clear render buffer." << std::endl;
 		return false;
 	}
@@ -171,7 +170,7 @@ bool clearRenderBuffer() {
 
 bool downloadRenderBuffer() {
 
-	if (cudaMemcpy(render_buffer, dev_render_buffer, render_n * sizeof(float), cudaMemcpyDeviceToHost) != cudaSuccess) {
+	if (cudaMemcpy(render_buffer, dev_render_buffer, render_n * sizeof(color3), cudaMemcpyDeviceToHost) != cudaSuccess) {
 		std::cout << "Cannot download render buffer." << std::endl;
 		return false;
 	}
@@ -184,20 +183,20 @@ bool resetRender(int width, int height, scene_t& scene) {
 
 	render_width = width;
 	render_height = height;
-	render_n = render_width * render_height * 3;
+	render_n = render_width * render_height;
 	render_count = 0;
 
 	if (render_buffer != nullptr) {
 		delete render_buffer;
 	}
-	render_buffer = new float[render_n];
+	render_buffer = new color3[render_n];
 
 	if (cudaSetDevice(0) != cudaSuccess) {
 		std::cout << "Cannot find CUDA device." << std::endl;
 		return false;
 	}
 
-	if (cudaMalloc(&dev_render_buffer, render_n * sizeof(float)) != cudaSuccess) {
+	if (cudaMalloc(&dev_render_buffer, render_n * sizeof(color3)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
 	}
@@ -226,12 +225,12 @@ bool resetRender(int width, int height, scene_t& scene) {
 		return false;
 	}
 
-	if (cudaMalloc(&dev_curand_state, render_width * render_height * sizeof(curandState)) != cudaSuccess) {
+	if (cudaMalloc(&dev_curand_state, render_n * sizeof(curandState)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
 	}
 
-	int blocks = (render_width * render_height + RESET_DIM - 1) / RESET_DIM;
+	int blocks = (render_n + RESET_DIM - 1) / RESET_DIM;
 	int threads_per_block = RESET_DIM;
 	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_surfaces, render_width, render_height, scene.spheres.size());
 	cudaError_t cudaStatus;
@@ -278,9 +277,17 @@ bool render(unsigned char* image_data, camera_t& camera) {
 		return false;
 	}
 
-	for (int i = 0; i < render_width * render_height * 3; i++) {
-		image_data[i] = fminf((256.0f * render_buffer[i]) / render_count, 255.0f);
+	for (int i = 0; i < render_n; i++) {
+		color3 color = render_buffer[i];
+		color /= render_count;
+		color.fix();
+		color *= 256.0f;
+		image_data[3 * i] = fminf(color.r, 255.0f);
+		image_data[3 * i + 1] = fminf(color.g, 255.0f);
+		image_data[3 * i + 2] = fminf(color.b, 255.0f);
 	}
+
+	std::cout << render_count << std::endl;
 
 	return true;
 
