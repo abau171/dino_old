@@ -16,6 +16,7 @@ struct surface_t {
 };
 
 struct scene_t {
+	color3 background_emission;
 	std::vector<sphere_t> spheres;
 	std::vector<surface_t> surfaces;
 };

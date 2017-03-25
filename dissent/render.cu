@@ -25,6 +25,7 @@ static curandState* dev_curand_state;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
+__device__ color3 kernel_background_emission;
 __device__ int kernel_num_spheres;
 __device__ sphere_t* kernel_spheres;
 __device__ surface_t* kernel_surfaces;
@@ -72,7 +73,7 @@ __device__ vec3 random_hemi_normal(vec3 normal, int n) {
 	return hemi;
 }
 
-__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, int num_spheres) {
+__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, color3 background_emission, int num_spheres) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -81,6 +82,7 @@ __global__ void resetRenderKernel(color3* render_buffer, curandState* curand_sta
 		kernel_render_height = render_height;
 		kernel_render_n = render_width * render_height;
 		kernel_render_buffer = render_buffer;
+		kernel_background_emission = background_emission;
 		kernel_num_spheres = num_spheres;
 		kernel_spheres = spheres;
 		kernel_surfaces = surfaces;
@@ -147,6 +149,10 @@ __global__ void renderKernel(camera_t camera) {
 					final_color += d_product * kernel_surfaces[best_surface].emit;
 
 				}
+			} else {
+
+				final_color += d_product * kernel_background_emission;
+				break;
 			}
 
 		}
@@ -232,7 +238,7 @@ bool resetRender(int width, int height, scene_t& scene) {
 
 	int blocks = (render_n + RESET_DIM - 1) / RESET_DIM;
 	int threads_per_block = RESET_DIM;
-	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_surfaces, render_width, render_height, scene.spheres.size());
+	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_surfaces, render_width, render_height, scene.background_emission, scene.spheres.size());
 	cudaError_t cudaStatus;
 
 	cudaStatus = cudaGetLastError();
