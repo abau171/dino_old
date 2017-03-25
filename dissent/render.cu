@@ -14,6 +14,7 @@ static const unsigned int RESET_DIM = BLOCK_DIM * BLOCK_DIM;
 
 static int render_width, render_height, render_n;
 static int render_count;
+static bool should_clear = false;
 
 static color3* render_buffer;
 static color3* dev_render_buffer;
@@ -280,6 +281,12 @@ bool resetRender(int width, int height, scene_t& scene) {
 
 bool render(unsigned char* image_data, camera_t& camera) {
 
+	if (should_clear) {
+		clearRenderBuffer();
+		render_count = 0;
+		should_clear = false;
+	}
+
 	render_count++;
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
@@ -316,5 +323,12 @@ bool render(unsigned char* image_data, camera_t& camera) {
 	std::cout << render_count << std::endl;
 
 	return true;
+
+}
+
+void clearRender() {
+
+	render_count = 0;
+	should_clear = true;
 
 }
