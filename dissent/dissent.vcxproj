@@ -27,9 +27,12 @@
   <ItemGroup>
     <ClInclude Include="common.h" />
     <ClInclude Include="geometry.h" />
+    <ClInclude Include="render.h" />
+    <ClInclude Include="scene.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="geometry.cu" />
+    <CudaCompile Include="render.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{6C5A5311-6006-4658-AFB8-2D5FE9ED4ED7}</ProjectGuid>
