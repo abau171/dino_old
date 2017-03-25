@@ -18,7 +18,7 @@ static scene_t scene;
 
 void initScene() {
 
-	vec3 position = {0.0f, 5.0f, 7.0f};
+	vec3 position = {0.0f, 4.0f, 7.0f};
 
 	vec3 lookat = {0.0f, 2.11f, 0.0f};
 	vec3 forward = (lookat - position);
@@ -39,19 +39,28 @@ void initScene() {
 	scene.background_emission = {0.7f, 0.9f, 1.4f};
 
 	scene.spheres.push_back({{0.0f, -1000.0f, 0.0f}, 1000.0f});
-	scene.surfaces.push_back({0.0f, {0.3f, 0.3f, 0.3f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
+	scene.surfaces.push_back({0.0f, 0.0f, 1.0f, {0.3f, 0.3f, 0.3f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
 
-	scene.spheres.push_back({{2.5f, 1.5f, 0.5f}, 1.5f});
-	scene.surfaces.push_back({0.3f, {0.2f, 0.4f, 0.8f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
+	scene.spheres.push_back({{0.5f, 1.5f, -1.5f}, 1.5f});
+	scene.surfaces.push_back({0.1f, 1.0f, 1.75f, {0.2f, 0.4f, 0.8f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
 
 	scene.spheres.push_back({{-3.0f, 1.0f, 0.5f}, 1.0f});
-	scene.surfaces.push_back({0.0f, {0.6f, 0.6f, 0.2f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
+	scene.surfaces.push_back({0.0f, 0.0f, 1.0f, {0.6f, 0.6f, 0.2f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
 
-	scene.spheres.push_back({{-0.5f, 0.8f, -1.0f}, 0.8f});
-	scene.surfaces.push_back({0.7f, {0.9f, 0.5f, 0.1f}, {0.9f, 0.5f, 0.1f}, {0.0f, 0.0f, 0.0f}});
+	scene.spheres.push_back({{-1.0f, 3.0f, -5.5f}, 3.0f});
+	scene.surfaces.push_back({0.4f, 0.0f, 1.0f, {0.2f, 0.4f, 0.8f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});
+
+	scene.spheres.push_back({{4.5f, 2.0f, -3.5f}, 2.0f});
+	scene.surfaces.push_back({0.7f, 0.0f, 1.0f, {0.9f, 0.5f, 0.1f}, {0.9f, 0.5f, 0.1f}, {0.0f, 0.0f, 0.0f}});
 
 	scene.spheres.push_back({{-2.0f, 3.0f, -1.0f}, 1.0f});
-	scene.surfaces.push_back({0.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {8.0f, 8.0f, 8.0f}});
+	scene.surfaces.push_back({0.0f, 0.0f, 1.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {8.0f, 8.0f, 8.0f}});
+
+	scene.spheres.push_back({{2.0f, 3.0f, -4.0f}, 0.5f});
+	scene.surfaces.push_back({0.0f, 0.0f, 1.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {20.0f, 5.0f, 5.0f}});
+
+	scene.spheres.push_back({{2.0f, 0.5f, 2.0f}, 0.5f});
+	scene.surfaces.push_back({0.0f, 0.0f, 1.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {5.0f, 20.0f, 5.0f}});
 
 }
 

@@ -31,12 +31,13 @@ __device__ sphere_t* kernel_spheres;
 __device__ surface_t* kernel_surfaces;
 __device__ curandState* kernel_curand_state;
 
-__device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& normal) {
+__device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& normal, bool& exiting) {
 
 	float a = direction.magnitude_2();
 	vec3 recentered = start - center;
 	float b = 2 * direction.dot(recentered);
-	float c = recentered.magnitude_2() - (radius * radius);
+	float recentered_radius_2 = recentered.magnitude_2();
+	float c = recentered_radius_2 - (radius * radius);
 
 	float discrim = (b * b) - (4.0f * a * c);
 	if (discrim < 0.0f) return false;
@@ -45,15 +46,18 @@ __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& 
 	float t1 = (-b + sqrt_discrim) / (2.0f * a);
 	float t2 = (-b - sqrt_discrim) / (2.0f * a);
 
-	if (t1 > 0.0f && t2 > 0.0f) {
-		t = std::fminf(t1, t2);
-	} else {
+	exiting = recentered_radius_2 < radius;
+
+	if (exiting) {
 		t = std::fmaxf(t1, t2);
+	} else {
+		t = std::fminf(t1, t2);
 	}
 	if (t < 0.0f) return false;
 
 	vec3 surface_point = start + direction * t;
 	normal = (surface_point - center) / radius;
+	if (exiting) normal = -normal;
 
 	return true;
 
@@ -113,41 +117,57 @@ __global__ void renderKernel(camera_t camera) {
 		color3 final_color = {0.0f, 0.0f, 0.0f};
 		color3 d_product = {1.0f, 1.0f, 1.0f};
 
-		for (int depth = 0; depth < 5; depth++) {
+		for (int depth = 0; depth < 15; depth++) {
 
 			float t;
 			vec3 normal;
+			bool exiting;
 
 			float best_t = INFINITY;
 			vec3 best_normal;
 			int best_surface;
+			bool best_exiting;
 
 			for (int i = 0; i < kernel_num_spheres; i++) {
-				if (kernel_spheres[i].intersect(ray_start, ray_direction, t, normal)) {
+				if (kernel_spheres[i].intersect(ray_start, ray_direction, t, normal, exiting)) {
 					if (t < best_t) {
 						best_t = t;
 						best_normal = normal;
 						best_surface = i;
+						best_exiting = exiting;
 					}
 				}
 			}
 
 			if (best_t < INFINITY) {
 
-				ray_start = (ray_start + ray_direction * best_t) + best_normal * 0.0001f;
-				if (curand_uniform(&kernel_curand_state[n]) > kernel_surfaces[best_surface].reflectance) {
+				ray_start = ray_start + ray_direction * best_t;
+				vec3 off_surface = best_normal * 0.0001f;
 
-					ray_direction = random_hemi_normal(best_normal, n);
+				if (curand_uniform(&kernel_curand_state[n]) < kernel_surfaces[best_surface].reflectance) {
 
-					final_color += d_product * kernel_surfaces[best_surface].emit;
-					d_product *= kernel_surfaces[best_surface].diffuse;
-
-				} else {
-
+					ray_start += off_surface;
 					ray_direction = ray_direction.reflect(best_normal);
 
 					final_color += d_product * kernel_surfaces[best_surface].emit;
 					d_product *= kernel_surfaces[best_surface].specular;
+
+				} else if (curand_uniform(&kernel_curand_state[n]) < kernel_surfaces[best_surface].transmission) {
+
+					float ni = best_exiting ? kernel_surfaces[best_surface].refractive_index : 1.0f / kernel_surfaces[best_surface].refractive_index;
+					float c1 = -best_normal.dot(ray_direction);
+					float c2 = sqrtf(1 - ni * ni * (1 - c1 * c1));
+
+					ray_start -= off_surface;
+					ray_direction = ray_direction * ni + best_normal * (ni * c1 - c2);
+
+				} else {
+
+					ray_start += off_surface;
+					ray_direction = random_hemi_normal(best_normal, n);
+
+					final_color += d_product * kernel_surfaces[best_surface].emit;
+					d_product *= kernel_surfaces[best_surface].diffuse;
 
 				}
 			} else {

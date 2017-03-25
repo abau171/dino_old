@@ -11,7 +11,7 @@ struct camera_t {
 };
 
 struct surface_t {
-	float reflectance;
+	float reflectance, transmission, refractive_index;
 	color3 diffuse, specular, emit;
 };
 
