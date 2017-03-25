@@ -71,6 +71,16 @@ void display() {
 
 }
 
+void keyboard(unsigned char key, int x, int y) {
+
+	switch (key) {
+	case 'q':
+		exit(0);
+		break;
+	}
+
+}
+
 int main(int argc, char** argv) {
 
 	initScene();
@@ -82,6 +92,7 @@ int main(int argc, char** argv) {
 	glutCreateWindow("Dissent Path Tracer");
 
 	glutDisplayFunc(display);
+	glutKeyboardFunc(keyboard);
 
 	glutMainLoop();
 
