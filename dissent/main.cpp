@@ -3,6 +3,9 @@
 #include "GL/glew.h"
 #include "GL/glut.h"
 
+#include "common.h"
+#include "geometry.h"
+
 const int WIDTH = 640;
 const int HEIGHT = 480;
 
