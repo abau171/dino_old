@@ -16,6 +16,8 @@ static unsigned char image_data[HEIGHT][WIDTH][3];
 static camera_t camera;
 static scene_t scene;
 
+bool paused = false;
+
 void initScene() {
 
 	vec3 position = {0.0f, 4.0f, 7.0f};
@@ -72,11 +74,13 @@ void updateImage() {
 
 void display() {
 
-	updateImage();
+	if (!paused) {
+		updateImage();
+		glutPostRedisplay();
+	}
 
 	glDrawPixels(WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image_data);
 	glutSwapBuffers();
-	glutPostRedisplay();
 
 }
 
@@ -85,6 +89,10 @@ void keyboard(unsigned char key, int x, int y) {
 	switch (key) {
 	case 'q':
 		exit(0);
+		break;
+	case 'p':
+		paused = !paused;
+		glutPostRedisplay();
 		break;
 	case 'r':
 		clearRender();
