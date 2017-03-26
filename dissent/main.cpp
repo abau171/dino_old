@@ -46,16 +46,16 @@ void initScene() {
 	scene.materials.push_back({0.0f, 0.0f, 0.0f, 1.0f, {0.3f, 0.3f, 0.3f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});
 
 	scene.spheres.push_back({{0.5f, 1.5f, -1.5f}, 1.5f});
-	scene.materials.push_back({1.0f, 0.0f, 150.0f, 1.2f, {0.2f, 0.4f, 0.8f}, {0.8f, 0.6f, 0.3f}, {0.0f, 0.0f, 0.0f}, {0.8f, 0.6f, 0.3f}});
+	scene.materials.push_back({0.2f, 1.0f, 50.0f, 1.2f, {0.2f, 0.4f, 0.8f}, {0.8f, 0.6f, 0.3f}, {0.0f, 0.0f, 0.0f}, {0.8f, 0.6f, 0.3f}});
 
-	/*scene.spheres.push_back({{-3.0f, 1.0f, 0.5f}, 1.0f});
+	scene.spheres.push_back({{-3.0f, 1.0f, 0.5f}, 1.0f});
 	scene.materials.push_back({0.0f, 0.0f, 0.0f, 1.0f, {0.6f, 0.6f, 0.2f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});
 
 	scene.spheres.push_back({{-1.0f, 3.0f, -5.5f}, 3.0f});
 	scene.materials.push_back({0.2f, 0.0f, 0.0f, 1.0f, {0.8f, 0.2f, 0.6f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});
 
 	scene.spheres.push_back({{4.5f, 2.0f, -3.5f}, 2.0f});
-	scene.materials.push_back({0.7f, 0.0f, 0.0f, 1.0f, {0.85f, 0.85f, 0.9f}, {0.85f, 0.85f, 0.9f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});*/
+	scene.materials.push_back({0.7f, 0.0f, 0.0f, 1.0f, {0.85f, 0.85f, 0.9f}, {0.85f, 0.85f, 0.9f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}});
 
 	scene.spheres.push_back({{-2.0f, 3.0f, -1.0f}, 1.0f});
 	scene.materials.push_back({0.0f, 0.0f, 0.0f, 1.0f, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {8.0f, 8.0f, 8.0f}, {1.0f, 1.0f, 1.0f}});

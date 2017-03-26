@@ -84,6 +84,24 @@ __device__ vec3 random_hemi(int n) {
 
 }
 
+__device__ vec3 random_phong_hemi(float spec_power, int n) {
+
+	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
+
+	float cos_theta = powf(curand_uniform(&kernel_curand_state[n]), 1.0f / (spec_power + 1.0f));
+	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
+
+	float cos_phi = cosf(phi);
+	float sin_phi = sinf(phi);
+
+	return {
+		sin_theta * cos_phi,
+		cos_theta,
+		sin_theta * sin_phi
+	};
+
+}
+
 __device__ vec3 random_hemi_normal(vec3 normal, int n) {
 	vec3 hemi;
 	do {
@@ -208,22 +226,19 @@ __global__ void renderKernel(camera_t camera) {
 
 					ray_start += off_surface;
 
-					float spec_multiplier;
 					if (kernel_materials[best_surface].spec_power > 0.0f) { // Phong specular
 
 						vec3 ray_reflect = ray_direction.reflect(best_normal);
-						ray_direction = random_hemi(n).change_up(best_normal);
-						spec_multiplier = 50.0f * powf(fmaxf(ray_reflect.dot(ray_direction), 0.0f), kernel_materials[best_surface].spec_power);
+						ray_direction = random_phong_hemi(kernel_materials[best_surface].spec_power, n).change_up(best_normal);
 
 					} else { // perfect reflection
 
-						spec_multiplier = 1.0f;
 						ray_direction = ray_direction.reflect(best_normal);
 
 					}
 
 					final_color += d_product * kernel_materials[best_surface].emit;
-					d_product *= kernel_materials[best_surface].specular * spec_multiplier;
+					d_product *= kernel_materials[best_surface].specular;
 
 				} else if (curand_uniform(&kernel_curand_state[n]) < kernel_materials[best_surface].transmission_weight) {
 
