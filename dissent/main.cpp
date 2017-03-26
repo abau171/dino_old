@@ -38,7 +38,9 @@ void initScene() {
 		(float) WIDTH / HEIGHT
 	};
 
-	scene.background_emission = {0.7f, 0.9f, 1.4f};
+	scene.params.background_emission = {0.7f, 0.9f, 1.4f};
+	scene.params.aperture_radius = 1.0f;
+	scene.params.focal_distance = 8.6f;
 
 	scene.spheres.push_back({{0.0f, -1000.0f, 0.0f}, 1000.0f});
 	scene.surfaces.push_back({0.0f, 0.0f, 1.0f, {0.3f, 0.3f, 0.3f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}});

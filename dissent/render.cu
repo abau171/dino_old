@@ -1,3 +1,5 @@
+#define _USE_MATH_DEFINES
+
 #include <iostream>
 #include <cmath>
 
@@ -26,7 +28,7 @@ static curandState* dev_curand_state;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
-__device__ color3 kernel_background_emission;
+__device__ scene_parameters_t kernel_scene_params;
 __device__ int kernel_num_spheres;
 __device__ sphere_t* kernel_spheres;
 __device__ surface_t* kernel_surfaces;
@@ -78,7 +80,13 @@ __device__ vec3 random_hemi_normal(vec3 normal, int n) {
 	return hemi;
 }
 
-__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, color3 background_emission, int num_spheres) {
+__device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
+	float theta = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
+	float sqrtr = sqrtf(curand_uniform(&kernel_curand_state[n]));
+	return ortho1 * sqrtr * sinf(theta) + ortho2 * sqrtr * cosf(theta);
+}
+
+__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
 	int render_n = render_width * render_height;
@@ -88,7 +96,7 @@ __global__ void resetRenderKernel(color3* render_buffer, curandState* curand_sta
 		kernel_render_height = render_height;
 		kernel_render_n = render_n;
 		kernel_render_buffer = render_buffer;
-		kernel_background_emission = background_emission;
+		kernel_scene_params = scene_params;
 		kernel_num_spheres = num_spheres;
 		kernel_spheres = spheres;
 		kernel_surfaces = surfaces;
@@ -112,8 +120,9 @@ __global__ void renderKernel(camera_t camera) {
 
 		float screen_x = (x + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_width - 0.5f;
 		float screen_y = (y + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_height - 0.5f;
-		vec3 ray_start = camera.position;
-		vec3 ray_direction = camera.forward + (camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y);
+		vec3 dof_confusion = confusion_disk(camera.up, camera.right, n) * kernel_scene_params.aperture_radius;
+		vec3 ray_start = camera.position + dof_confusion;
+		vec3 ray_direction = (camera.forward + camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y) * kernel_scene_params.focal_distance - dof_confusion;
 		ray_direction.normalize();
 
 		color3 final_color = {0.0f, 0.0f, 0.0f};
@@ -201,7 +210,7 @@ __global__ void renderKernel(camera_t camera) {
 				}
 			} else {
 
-				final_color += d_product * kernel_background_emission;
+				final_color += d_product * kernel_scene_params.background_emission;
 				break;
 			}
 
@@ -288,7 +297,7 @@ bool resetRender(int width, int height, scene_t& scene) {
 
 	int blocks = (render_n + RESET_DIM - 1) / RESET_DIM;
 	int threads_per_block = RESET_DIM;
-	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_surfaces, render_width, render_height, scene.background_emission, scene.spheres.size());
+	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_surfaces, render_width, render_height, scene.params, scene.spheres.size());
 	cudaError_t cudaStatus;
 
 	cudaStatus = cudaGetLastError();
