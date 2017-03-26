@@ -81,11 +81,12 @@ __device__ vec3 random_hemi_normal(vec3 normal, int n) {
 __global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, color3 background_emission, int num_spheres) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
+	int render_n = render_width * render_height;
 
 	if (t == 0) {
 		kernel_render_width = render_width;
 		kernel_render_height = render_height;
-		kernel_render_n = render_width * render_height;
+		kernel_render_n = render_n;
 		kernel_render_buffer = render_buffer;
 		kernel_background_emission = background_emission;
 		kernel_num_spheres = num_spheres;
@@ -94,7 +95,7 @@ __global__ void resetRenderKernel(color3* render_buffer, curandState* curand_sta
 		kernel_curand_state = curand_state;
 	}
 
-	if (t < kernel_render_n) {
+	if (t < render_n) {
 		curand_init(t, 0, 0, &curand_state[t]);
 	}
 
