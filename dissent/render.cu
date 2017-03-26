@@ -102,21 +102,6 @@ __device__ vec3 random_phong_hemi(float spec_power, int n) {
 
 }
 
-__device__ vec3 random_hemi_normal(vec3 normal, int n) {
-	vec3 hemi;
-	do {
-		hemi.x = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
-		hemi.y = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
-		hemi.z = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
-
-	} while (hemi.magnitude_2() > 1);
-		hemi.normalize();
-		if (hemi.dot(normal) < 0.0f) {
-			hemi = -hemi;
-		}
-		return hemi;
-}
-
 __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	float theta = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
 	float sqrtr = sqrtf(curand_uniform(&kernel_curand_state[n]));
@@ -163,7 +148,7 @@ __global__ void renderKernel(camera_t camera) {
 		ray_direction.normalize();
 
 		color3 final_color = {0.0f, 0.0f, 0.0f};
-		color3 d_product = {1.0f, 1.0f, 1.0f};
+		color3 running_absorption = {1.0f, 1.0f, 1.0f};
 
 		for (int depth = 0; depth < 15; depth++) {
 
@@ -173,7 +158,7 @@ __global__ void renderKernel(camera_t camera) {
 
 			float best_t = INFINITY;
 			vec3 best_normal;
-			int best_surface;
+			int best_material_index;
 			bool best_exiting;
 
 			for (int i = 0; i < kernel_num_spheres; i++) {
@@ -181,7 +166,7 @@ __global__ void renderKernel(camera_t camera) {
 					if (t < best_t) {
 						best_t = t;
 						best_normal = normal;
-						best_surface = i;
+						best_material_index = i;
 						best_exiting = exiting;
 					}
 				}
@@ -189,20 +174,22 @@ __global__ void renderKernel(camera_t camera) {
 
 			if (best_t < INFINITY) {
 
+				material_t best_material = kernel_materials[best_material_index];
+
 				ray_start = ray_start + ray_direction * best_t;
 				vec3 off_surface = best_normal * 0.0001f;
 
 				float effective_specular_weight;
 
-				float n1 = best_exiting ? kernel_materials[best_surface].refractive_index : 1.0f;
-				float n2 = best_exiting ? 1.0f : kernel_materials[best_surface].refractive_index;
+				float n1 = best_exiting ? best_material.refractive_index : 1.0f;
+				float n2 = best_exiting ? 1.0f : best_material.refractive_index;
 				float ni = n1 / n2;
 
 				float cosi = -ray_direction.dot(best_normal);
 				float sint_2 = ni * ni * (1 - cosi * cosi);
 				float cost = sqrtf(1 - sint_2);
 
-				if (kernel_materials[best_surface].specular_weight > 0.0f) {
+				if (best_material.specular_weight > 0.0f) {
 
 					if (sint_2 > 1) {
 						effective_specular_weight = 1.0f;
@@ -216,7 +203,7 @@ __global__ void renderKernel(camera_t camera) {
 							base = 1.0f - cost;
 						}
 						float r_schlick = r0 + (1 - r0) * base * base * base * base * base;
-						effective_specular_weight = kernel_materials[best_surface].specular_weight + (1.0f - kernel_materials[best_surface].specular_weight) * r_schlick;
+						effective_specular_weight = best_material.specular_weight + (1.0f - best_material.specular_weight) * r_schlick;
 					}
 				} else {
 					effective_specular_weight = 0.0f;
@@ -226,10 +213,10 @@ __global__ void renderKernel(camera_t camera) {
 
 					ray_start += off_surface;
 
-					if (kernel_materials[best_surface].spec_power > 0.0f) { // Phong specular
+					if (best_material.spec_power > 0.0f) { // Phong specular
 
 						vec3 ray_reflect = ray_direction.reflect(best_normal);
-						ray_direction = random_phong_hemi(kernel_materials[best_surface].spec_power, n).change_up(best_normal);
+						ray_direction = random_phong_hemi(best_material.spec_power, n).change_up(best_normal);
 
 					} else { // perfect reflection
 
@@ -237,18 +224,18 @@ __global__ void renderKernel(camera_t camera) {
 
 					}
 
-					final_color += d_product * kernel_materials[best_surface].emit;
-					d_product *= kernel_materials[best_surface].specular;
+					final_color += running_absorption * best_material.emission;
+					running_absorption *= best_material.specular;
 
-				} else if (curand_uniform(&kernel_curand_state[n]) < kernel_materials[best_surface].transmission_weight) {
+				} else if (curand_uniform(&kernel_curand_state[n]) < best_material.transmission_weight) {
 
 					ray_start -= off_surface;
 					ray_direction = ray_direction * ni + best_normal * (ni * cosi - cost);
 					ray_direction.normalize();
 					if (best_exiting) {
-						color3 attenuation_color = kernel_materials[best_surface].attenuation_color;
-						color3 beer = {expf(best_t * logf(attenuation_color.r)), expf(best_t * logf(attenuation_color.g)), expf(best_t * logf(attenuation_color.b))};
-						d_product *= beer;
+						color3 attenuation = best_material.attenuation;
+						color3 beer = {expf(best_t * logf(attenuation.r)), expf(best_t * logf(attenuation.g)), expf(best_t * logf(attenuation.b))};
+						running_absorption *= beer;
 					}
 
 				} else {
@@ -256,13 +243,13 @@ __global__ void renderKernel(camera_t camera) {
 					ray_start += off_surface;
 					ray_direction = random_hemi(n).change_up(best_normal);
 
-					final_color += d_product * kernel_materials[best_surface].emit;
-					d_product *= kernel_materials[best_surface].diffuse;
+					final_color += running_absorption * best_material.emission;
+					running_absorption *= best_material.diffuse;
 
 				}
 			} else {
 
-				final_color += d_product * kernel_scene_params.background_emission;
+				final_color += running_absorption * kernel_scene_params.background_emission;
 				break;
 			}
 
