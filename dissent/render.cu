@@ -47,7 +47,7 @@ __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& 
 	float t1 = (-b + sqrt_discrim) / (2.0f * a);
 	float t2 = (-b - sqrt_discrim) / (2.0f * a);
 
-	exiting = recentered_radius_2 < radius;
+	exiting = recentered_radius_2 < radius * radius;
 
 	if (exiting) {
 		t = std::fmaxf(t1, t2);
@@ -146,7 +146,38 @@ __global__ void renderKernel(camera_t camera) {
 				ray_start = ray_start + ray_direction * best_t;
 				vec3 off_surface = best_normal * 0.0001f;
 
-				if (curand_uniform(&kernel_curand_state[n]) < kernel_surfaces[best_surface].reflectance) {
+				float effective_reflectance;
+				float effective_transmission;
+
+				float n1 = best_exiting ? kernel_surfaces[best_surface].refractive_index : 1.0f;
+				float n2 = best_exiting ? 1.0f : kernel_surfaces[best_surface].refractive_index;
+				float ni = n1 / n2;
+
+				float cosi = -ray_direction.dot(best_normal);
+				float sint_2 = ni * ni * (1 - cosi * cosi);
+				float cost = sqrtf(1 - sint_2);
+
+				if (kernel_surfaces[best_surface].reflectance > 0.0f) {
+
+					if (sint_2 > 1) {
+						effective_reflectance = 1.0f;
+					} else {
+						float r0 = (n1 - n2) / (n1 + n2);
+						r0 *= r0;
+						float base;
+						if (n1 <= n2) {
+							base = 1.0f - cosi;
+						} else {
+							base = 1.0f - cost;
+						}
+						float r_schlick = r0 + (1 - r0) * base * base * base * base * base;
+						effective_reflectance = kernel_surfaces[best_surface].reflectance + (1.0f - kernel_surfaces[best_surface].reflectance) * r_schlick;
+					}
+				} else {
+					effective_reflectance = 0.0f;
+				}
+
+				if (curand_uniform(&kernel_curand_state[n]) < effective_reflectance) {
 
 					ray_start += off_surface;
 					ray_direction = ray_direction.reflect(best_normal);
@@ -156,12 +187,8 @@ __global__ void renderKernel(camera_t camera) {
 
 				} else if (curand_uniform(&kernel_curand_state[n]) < kernel_surfaces[best_surface].transmission) {
 
-					float ni = best_exiting ? kernel_surfaces[best_surface].refractive_index : 1.0f / kernel_surfaces[best_surface].refractive_index;
-					float c1 = -best_normal.dot(ray_direction);
-					float c2 = sqrtf(1 - ni * ni * (1 - c1 * c1));
-
 					ray_start -= off_surface;
-					ray_direction = ray_direction * ni + best_normal * (ni * c1 - c2);
+					ray_direction = ray_direction * ni + best_normal * (ni * cosi - cost);
 
 				} else {
 
@@ -313,9 +340,7 @@ bool render(unsigned char* image_data, camera_t& camera) {
 	}
 
 	for (int i = 0; i < render_n; i++) {
-		color3 color = render_buffer[i] / render_count;
-		color.fix();
-		color *= 256.0f;
+		color3 color = render_buffer[i] * (256.0f / render_count);
 		image_data[3 * i] = fminf(color.r, 255.0f);
 		image_data[3 * i + 1] = fminf(color.g, 255.0f);
 		image_data[3 * i + 2] = fminf(color.b, 255.0f);

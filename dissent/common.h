@@ -152,13 +152,4 @@ struct color3 {
 		return *this;
 	}
 
-	__host__ __device__ void fix() {
-		float max = std::fmaxf(std::fmaxf(r, g), b);
-		if (max > 1.0f) {
-			r /= max;
-			g /= max;
-			b /= max;
-		}
-	}
-
 };
