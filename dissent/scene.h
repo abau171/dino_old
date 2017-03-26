@@ -10,9 +10,10 @@ struct camera_t {
 	float aspect_ratio;
 };
 
-struct surface_t {
-	float reflectance, transmission, refractive_index;;
-	color3 diffuse, specular, emit, attenuation_color; // TODO: split attenuation_color and refractive_index into volume_t
+struct material_t {
+	float specular_weight, transmission_weight; // first checks for specular reflection, if not then checks for transmission vs diffuse
+	float spec_power, refractive_index; // spec_power=0 means perfect reflection
+	color3 diffuse, specular, emit, attenuation_color;
 };
 
 struct scene_parameters_t {
@@ -23,5 +24,5 @@ struct scene_parameters_t {
 struct scene_t {
 	scene_parameters_t params;
 	std::vector<sphere_t> spheres;
-	std::vector<surface_t> surfaces;
+	std::vector<material_t> materials;
 };

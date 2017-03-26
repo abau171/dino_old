@@ -45,6 +45,19 @@ struct vec3 {
 		return *this;
 	}
 
+	// these two can be dangerous: they are easy to mix with dot product
+
+	//__host__ __device__ vec3 operator*(vec3 other) {
+	//	return {other.x * x, other.y * y, other.z * z};
+	//}
+
+	//__host__ __device__ vec3 operator*=(vec3 other) {
+	//	x *= other.x;
+	//	y *= other.y;
+	//	z *= other.z;
+	//	return *this;
+	//}
+
 	__host__ __device__ vec3 operator/(float scalar) {
 		return {x / scalar, y / scalar, z / scalar};
 	}
@@ -85,6 +98,18 @@ struct vec3 {
 
 	__host__ __device__ vec3 reflect(vec3 normal) {
 		return *this - normal * (2.0f * this->dot(normal));
+	}
+
+	__host__ __device__ vec3 change_coord_system(vec3 cx, vec3 cy, vec3 cz) {
+		return cx * x + cy * y + cz * z;
+	}
+
+	__host__ __device__ vec3 change_up(vec3 cy) {
+		// cy assumed normalized
+		vec3 cx = cy.cross({0.0f, 1.0f, 0.0f});
+		cx.normalize();
+		vec3 cz = cx.cross(cy);
+		return this->change_coord_system(cx, cy, cz);
 	}
 
 };

@@ -22,7 +22,7 @@ static color3* render_buffer;
 static color3* dev_render_buffer;
 
 static sphere_t* dev_spheres;
-static surface_t* dev_surfaces;
+static material_t* dev_materials;
 
 static curandState* dev_curand_state;
 
@@ -31,7 +31,7 @@ __device__ color3* kernel_render_buffer;
 __device__ scene_parameters_t kernel_scene_params;
 __device__ int kernel_num_spheres;
 __device__ sphere_t* kernel_spheres;
-__device__ surface_t* kernel_surfaces;
+__device__ material_t* kernel_materials;
 __device__ curandState* kernel_curand_state;
 
 __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& normal, bool& exiting) {
@@ -66,18 +66,37 @@ __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& 
 
 }
 
+__device__ vec3 random_hemi(int n) {
+
+	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
+
+	float cos_theta = curand_uniform(&kernel_curand_state[n]);
+	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
+
+	float cos_phi = cosf(phi);
+	float sin_phi = sinf(phi);
+
+	return {
+		sin_theta * cos_phi,
+		cos_theta,
+		sin_theta * sin_phi
+	};
+
+}
+
 __device__ vec3 random_hemi_normal(vec3 normal, int n) {
 	vec3 hemi;
 	do {
 		hemi.x = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
 		hemi.y = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
 		hemi.z = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+
 	} while (hemi.magnitude_2() > 1);
-	hemi.normalize();
-	if (hemi.dot(normal) < 0.0f) {
-		hemi = -hemi;
-	}
-	return hemi;
+		hemi.normalize();
+		if (hemi.dot(normal) < 0.0f) {
+			hemi = -hemi;
+		}
+		return hemi;
 }
 
 __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
@@ -86,7 +105,7 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sinf(theta) + ortho2 * sqrtr * cosf(theta);
 }
 
-__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, surface_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
+__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, material_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
 	int render_n = render_width * render_height;
@@ -99,7 +118,7 @@ __global__ void resetRenderKernel(color3* render_buffer, curandState* curand_sta
 		kernel_scene_params = scene_params;
 		kernel_num_spheres = num_spheres;
 		kernel_spheres = spheres;
-		kernel_surfaces = surfaces;
+		kernel_materials = surfaces;
 		kernel_curand_state = curand_state;
 	}
 
@@ -155,21 +174,20 @@ __global__ void renderKernel(camera_t camera) {
 				ray_start = ray_start + ray_direction * best_t;
 				vec3 off_surface = best_normal * 0.0001f;
 
-				float effective_reflectance;
-				float effective_transmission;
+				float effective_specular_weight;
 
-				float n1 = best_exiting ? kernel_surfaces[best_surface].refractive_index : 1.0f;
-				float n2 = best_exiting ? 1.0f : kernel_surfaces[best_surface].refractive_index;
+				float n1 = best_exiting ? kernel_materials[best_surface].refractive_index : 1.0f;
+				float n2 = best_exiting ? 1.0f : kernel_materials[best_surface].refractive_index;
 				float ni = n1 / n2;
 
 				float cosi = -ray_direction.dot(best_normal);
 				float sint_2 = ni * ni * (1 - cosi * cosi);
 				float cost = sqrtf(1 - sint_2);
 
-				if (kernel_surfaces[best_surface].reflectance > 0.0f) {
+				if (kernel_materials[best_surface].specular_weight > 0.0f) {
 
 					if (sint_2 > 1) {
-						effective_reflectance = 1.0f;
+						effective_specular_weight = 1.0f;
 					} else {
 						float r0 = (n1 - n2) / (n1 + n2);
 						r0 *= r0;
@@ -180,27 +198,40 @@ __global__ void renderKernel(camera_t camera) {
 							base = 1.0f - cost;
 						}
 						float r_schlick = r0 + (1 - r0) * base * base * base * base * base;
-						effective_reflectance = kernel_surfaces[best_surface].reflectance + (1.0f - kernel_surfaces[best_surface].reflectance) * r_schlick;
+						effective_specular_weight = kernel_materials[best_surface].specular_weight + (1.0f - kernel_materials[best_surface].specular_weight) * r_schlick;
 					}
 				} else {
-					effective_reflectance = 0.0f;
+					effective_specular_weight = 0.0f;
 				}
 
-				if (curand_uniform(&kernel_curand_state[n]) < effective_reflectance) {
+				if (curand_uniform(&kernel_curand_state[n]) < effective_specular_weight) {
 
 					ray_start += off_surface;
-					ray_direction = ray_direction.reflect(best_normal);
 
-					final_color += d_product * kernel_surfaces[best_surface].emit;
-					d_product *= kernel_surfaces[best_surface].specular;
+					float spec_multiplier;
+					if (kernel_materials[best_surface].spec_power > 0.0f) { // Phong specular
 
-				} else if (curand_uniform(&kernel_curand_state[n]) < kernel_surfaces[best_surface].transmission) {
+						vec3 ray_reflect = ray_direction.reflect(best_normal);
+						ray_direction = random_hemi(n).change_up(best_normal);
+						spec_multiplier = 50.0f * powf(fmaxf(ray_reflect.dot(ray_direction), 0.0f), kernel_materials[best_surface].spec_power);
+
+					} else { // perfect reflection
+
+						spec_multiplier = 1.0f;
+						ray_direction = ray_direction.reflect(best_normal);
+
+					}
+
+					final_color += d_product * kernel_materials[best_surface].emit;
+					d_product *= kernel_materials[best_surface].specular * spec_multiplier;
+
+				} else if (curand_uniform(&kernel_curand_state[n]) < kernel_materials[best_surface].transmission_weight) {
 
 					ray_start -= off_surface;
 					ray_direction = ray_direction * ni + best_normal * (ni * cosi - cost);
 					ray_direction.normalize();
 					if (best_exiting) {
-						color3 attenuation_color = kernel_surfaces[best_surface].attenuation_color;
+						color3 attenuation_color = kernel_materials[best_surface].attenuation_color;
 						color3 beer = {expf(best_t * logf(attenuation_color.r)), expf(best_t * logf(attenuation_color.g)), expf(best_t * logf(attenuation_color.b))};
 						d_product *= beer;
 					}
@@ -208,10 +239,10 @@ __global__ void renderKernel(camera_t camera) {
 				} else {
 
 					ray_start += off_surface;
-					ray_direction = random_hemi_normal(best_normal, n);
+					ray_direction = random_hemi(n).change_up(best_normal);
 
-					final_color += d_product * kernel_surfaces[best_surface].emit;
-					d_product *= kernel_surfaces[best_surface].diffuse;
+					final_color += d_product * kernel_materials[best_surface].emit;
+					d_product *= kernel_materials[best_surface].diffuse;
 
 				}
 			} else {
@@ -286,13 +317,13 @@ bool resetRender(int width, int height, scene_t& scene) {
 		return false;
 	}
 
-	if (cudaMalloc(&dev_surfaces, scene.spheres.size() * sizeof(surface_t)) != cudaSuccess) {
+	if (cudaMalloc(&dev_materials, scene.spheres.size() * sizeof(material_t)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
 	}
 
-	if (cudaMemcpy(dev_surfaces, scene.surfaces.data(), scene.spheres.size() * sizeof(surface_t), cudaMemcpyHostToDevice) != cudaSuccess) {
-		std::cout << "Cannot upload surfaces." << std::endl;
+	if (cudaMemcpy(dev_materials, scene.materials.data(), scene.spheres.size() * sizeof(material_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+		std::cout << "Cannot upload materials." << std::endl;
 		return false;
 	}
 
@@ -303,7 +334,7 @@ bool resetRender(int width, int height, scene_t& scene) {
 
 	int blocks = (render_n + RESET_DIM - 1) / RESET_DIM;
 	int threads_per_block = RESET_DIM;
-	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_surfaces, render_width, render_height, scene.params, scene.spheres.size());
+	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_materials, render_width, render_height, scene.params, scene.spheres.size());
 	cudaError_t cudaStatus;
 
 	cudaStatus = cudaGetLastError();
