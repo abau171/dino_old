@@ -198,6 +198,12 @@ __global__ void renderKernel(camera_t camera) {
 
 					ray_start -= off_surface;
 					ray_direction = ray_direction * ni + best_normal * (ni * cosi - cost);
+					ray_direction.normalize();
+					if (best_exiting) {
+						color3 attenuation_color = kernel_surfaces[best_surface].attenuation_color;
+						color3 beer = {expf(best_t * logf(attenuation_color.r)), expf(best_t * logf(attenuation_color.g)), expf(best_t * logf(attenuation_color.b))};
+						d_product *= beer;
+					}
 
 				} else {
 

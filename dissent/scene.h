@@ -11,8 +11,8 @@ struct camera_t {
 };
 
 struct surface_t {
-	float reflectance, transmission, refractive_index;
-	color3 diffuse, specular, emit;
+	float reflectance, transmission, refractive_index;;
+	color3 diffuse, specular, emit, attenuation_color; // TODO: split attenuation_color and refractive_index into volume_t
 };
 
 struct scene_parameters_t {
