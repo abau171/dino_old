@@ -4,6 +4,9 @@
 
 #include "cuda_runtime.h"
 
+#define INV_GAMMA_EXP (2.2f)
+#define GAMMA_EXP (1.0f / INV_GAMMA_EXP)
+
 struct vec3 {
 
 	float x, y, z;
@@ -177,4 +180,19 @@ struct color3 {
 		return *this;
 	}
 
+	__host__ __device__ color3 gammaToLinear() {
+		return {
+			powf(r, INV_GAMMA_EXP),
+			powf(g, INV_GAMMA_EXP),
+			powf(b, INV_GAMMA_EXP)
+		};
+	}
+
+	__host__ __device__ color3 linearToGamma() {
+		return {
+			powf(r, GAMMA_EXP),
+			powf(g, GAMMA_EXP),
+			powf(b, GAMMA_EXP)
+		};
+	}
 };

@@ -39,9 +39,11 @@ void initScene() {
 	};
 
 	scene.params.background_emission = {0.1f, 0.15f, 0.3f};
+	scene.params.background_emission = scene.params.background_emission.gammaToLinear();
 	scene.params.aperture_radius = 0.0f;
 	scene.params.focal_distance = 8.6f;
 	scene.params.air_volume = {1.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
+	scene.params.air_volume.attenuation = scene.params.air_volume.attenuation.gammaToLinear();
 
 	scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
 	scene.setDiffuse({0.4f, 0.4f, 0.3f});
@@ -49,19 +51,19 @@ void initScene() {
 	scene.addSphere({-1.4f, 2.5f, 1.5f}, 1.2f);
 	scene.setSpecularWeight(0.1f);
 	scene.setSpecular({1.0f, 1.0f, 1.0f});
-	scene.setSpecularPower(1000.0f);
+	scene.setSpecularPower(10000.0f);
 	scene.setDiffuse({0.8f, 0.0f, 0.5f});
 
 	scene.addSphere({1.4f, 2.5f, 1.5f}, 1.2f);
 	scene.setSpecularWeight(0.05f);
 	scene.setSpecular({1.0f, 1.0f, 1.0f});
-	scene.setSpecularPower(1000.0f);
+	scene.setSpecularPower(10000.0f);
 	scene.setTransmissionWeight(1.0f);
 	scene.setAttenuation({0.8f, 0.0f, 0.5f});
 	scene.setScatter(5.0f);
 	
 	scene.addSphere({0.0f, 10.0f, 1.5f}, 2.0f);
-	scene.setEmission({4.0f, 4.0f, 4.0f});
+	scene.setEmission({1.0f, 1.0f, 1.0f}, 20.0f);
 
 }
 

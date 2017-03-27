@@ -70,19 +70,19 @@ struct scene_t {
 	}
 
 	void setDiffuse(color3 diffuse) {
-		materials.back().surface.diffuse = diffuse;
+		materials.back().surface.diffuse = diffuse.gammaToLinear();
 	}
 
 	void setSpecular(color3 specular) {
-		materials.back().surface.specular = specular;
+		materials.back().surface.specular = specular.gammaToLinear();
 	}
 
-	void setEmission(color3 emission) {
-		materials.back().surface.emission = emission;
+	void setEmission(color3 emission, float emission_intensity) {
+		materials.back().surface.emission = emission.gammaToLinear() * emission_intensity;
 	}
 
 	void setAttenuation(color3 attenuation) {
-		materials.back().volume.attenuation = attenuation;
+		materials.back().volume.attenuation = attenuation.gammaToLinear();
 	}
 
 	void setScatter(float scatter) {

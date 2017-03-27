@@ -431,7 +431,7 @@ bool render(unsigned char* image_data, camera_t& camera) {
 	}
 
 	for (int i = 0; i < render_n; i++) {
-		color3 color = render_buffer[i] * (256.0f / render_count);
+		color3 color = (render_buffer[i] / render_count).linearToGamma() * 256.0f;
 		image_data[3 * i] = fminf(color.r, 255.0f);
 		image_data[3 * i + 1] = fminf(color.g, 255.0f);
 		image_data[3 * i + 2] = fminf(color.b, 255.0f);
