@@ -216,7 +216,7 @@ __global__ void renderKernel(camera_t camera) {
 					if (best_material.spec_power > 0.0f) { // Phong specular
 
 						vec3 ray_reflect = ray_direction.reflect(best_normal);
-						ray_direction = random_phong_hemi(best_material.spec_power, n).change_up(best_normal);
+						ray_direction = random_phong_hemi(best_material.spec_power, n).change_up(ray_reflect);
 
 					} else { // perfect reflection
 
