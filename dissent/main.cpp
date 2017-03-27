@@ -41,6 +41,7 @@ void initScene() {
 	scene.params.background_emission = {0.7f, 0.9f, 1.4f};
 	scene.params.aperture_radius = 0.0f;
 	scene.params.focal_distance = 8.6f;
+	scene.params.air_volume = {1.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
 
 	scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
 	scene.setDiffuse({0.3f, 0.3f, 0.3f});
@@ -48,13 +49,13 @@ void initScene() {
 	scene.addSphere({-0.0f, 2.5f, 1.5f}, 1.5f);
 	scene.setSpecularWeight(0.2f);
 	scene.setSpecular({0.8f, 0.6f, 0.3f});
-	scene.setSpecularPower(1000.0f);
+	scene.setSpecularPower(0.0f);
 	scene.setTransmissionWeight(1.0f);
 	scene.setRefractiveIndex(1.6f);
 	scene.setAttenuation({0.8f, 0.6f, 0.3f});
 	
 	scene.addSphere({-2.0f, 5.0f, 2.5f}, 0.5f);
-	scene.setEmission({100.0f, 100.0f, 100.0f});
+	scene.setEmission({300.0f, 300.0f, 300.0f});
 
 }
 

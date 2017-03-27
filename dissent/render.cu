@@ -150,6 +150,8 @@ __global__ void renderKernel(camera_t camera) {
 		color3 final_color = {0.0f, 0.0f, 0.0f};
 		color3 running_absorption = {1.0f, 1.0f, 1.0f};
 
+		volume_t cur_volume = kernel_scene_params.air_volume;
+
 		for (int depth = 0; depth < 15; depth++) {
 
 			float t;
@@ -174,6 +176,10 @@ __global__ void renderKernel(camera_t camera) {
 
 			if (best_t < INFINITY) {
 
+				color3 attenuation = cur_volume.attenuation;
+				color3 beer = {expf(best_t * logf(attenuation.r)), expf(best_t * logf(attenuation.g)), expf(best_t * logf(attenuation.b))};
+				running_absorption *= beer;
+
 				material_t best_material = kernel_materials[best_material_index];
 
 				ray_start = ray_start + ray_direction * best_t;
@@ -181,15 +187,15 @@ __global__ void renderKernel(camera_t camera) {
 
 				float effective_specular_weight;
 
-				float n1 = best_exiting ? best_material.refractive_index : 1.0f;
-				float n2 = best_exiting ? 1.0f : best_material.refractive_index;
+				float n1 = best_exiting ? best_material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
+				float n2 = best_exiting ? kernel_scene_params.air_volume.refractive_index : best_material.volume.refractive_index;
 				float ni = n1 / n2;
 
 				float cosi = -ray_direction.dot(best_normal);
 				float sint_2 = ni * ni * (1 - cosi * cosi);
 				float cost = sqrtf(1 - sint_2);
 
-				if (best_material.specular_weight > 0.0f) {
+				if (best_material.surface.specular_weight > 0.0f) {
 
 					if (sint_2 > 1) {
 						effective_specular_weight = 1.0f;
@@ -203,20 +209,20 @@ __global__ void renderKernel(camera_t camera) {
 							base = 1.0f - cost;
 						}
 						float r_schlick = r0 + (1 - r0) * base * base * base * base * base;
-						effective_specular_weight = best_material.specular_weight + (1.0f - best_material.specular_weight) * r_schlick;
+						effective_specular_weight = best_material.surface.specular_weight + (1.0f - best_material.surface.specular_weight) * r_schlick;
 					}
 				} else {
 					effective_specular_weight = 0.0f;
 				}
 
-				if (curand_uniform(&kernel_curand_state[n]) < effective_specular_weight) {
+				if (curand_uniform(&kernel_curand_state[n]) < effective_specular_weight) { // specular
 
 					ray_start += off_surface;
 
-					if (best_material.spec_power > 0.0f) { // Phong specular
+					if (best_material.surface.spec_power > 0.0f) { // Phong specular
 
 						vec3 ray_reflect = ray_direction.reflect(best_normal);
-						ray_direction = random_phong_hemi(best_material.spec_power, n).change_up(ray_reflect);
+						ray_direction = random_phong_hemi(best_material.surface.spec_power, n).change_up(ray_reflect);
 
 					} else { // perfect reflection
 
@@ -224,29 +230,29 @@ __global__ void renderKernel(camera_t camera) {
 
 					}
 
-					final_color += running_absorption * best_material.emission;
-					running_absorption *= best_material.specular;
+					cur_volume = best_exiting ? best_material.volume : kernel_scene_params.air_volume;
 
-				} else if (curand_uniform(&kernel_curand_state[n]) < best_material.transmission_weight) {
+					final_color += running_absorption * best_material.surface.emission;
+					running_absorption *= best_material.surface.specular;
+
+				} else if (curand_uniform(&kernel_curand_state[n]) < best_material.surface.transmission_weight) { // refract
 
 					ray_start -= off_surface;
 					ray_direction = ray_direction * ni + best_normal * (ni * cosi - cost);
 					ray_direction.normalize();
-					if (best_exiting) {
-						color3 attenuation = best_material.attenuation;
-						color3 beer = {expf(best_t * logf(attenuation.r)), expf(best_t * logf(attenuation.g)), expf(best_t * logf(attenuation.b))};
-						running_absorption *= beer;
-					}
+					cur_volume = best_exiting ? kernel_scene_params.air_volume : best_material.volume;
 
-				} else {
+				} else { // diffuse
 
 					ray_start += off_surface;
 					ray_direction = random_hemi(n).change_up(best_normal);
+					cur_volume = best_exiting ? best_material.volume : kernel_scene_params.air_volume;
 
-					final_color += running_absorption * best_material.emission;
-					running_absorption *= best_material.diffuse;
+					final_color += running_absorption * best_material.surface.emission;
+					running_absorption *= best_material.surface.diffuse;
 
 				}
+
 			} else {
 
 				final_color += running_absorption * kernel_scene_params.background_emission;
