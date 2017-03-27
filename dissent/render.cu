@@ -66,6 +66,24 @@ __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& 
 
 }
 
+__device__ vec3 random_sphere(int n) {
+
+	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
+
+	float cos_theta = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
+
+	float cos_phi = cosf(phi);
+	float sin_phi = sinf(phi);
+
+	return {
+		sin_theta * cos_phi,
+		cos_theta,
+		sin_theta * sin_phi
+	};
+
+}
+
 __device__ vec3 random_hemi(int n) {
 
 	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
@@ -152,7 +170,7 @@ __global__ void renderKernel(camera_t camera) {
 
 		volume_t cur_volume = kernel_scene_params.air_volume;
 
-		for (int depth = 0; depth < 15; depth++) {
+		for (int depth = 0; depth < 40; depth++) {
 
 			float t;
 			vec3 normal;
@@ -174,7 +192,18 @@ __global__ void renderKernel(camera_t camera) {
 				}
 			}
 
-			if (best_t < INFINITY) {
+			float scatter_t = (cur_volume.scatter > 0.0f) ? -logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
+
+			if (best_t > scatter_t) { // scatter
+
+				ray_start += ray_direction * scatter_t;
+				ray_direction = random_sphere(n);
+
+				color3 attenuation = cur_volume.attenuation;
+				color3 beer = {expf(scatter_t * logf(attenuation.r)), expf(scatter_t * logf(attenuation.g)), expf(scatter_t * logf(attenuation.b))};
+				running_absorption *= beer;
+
+			} else if (best_t < INFINITY) {
 
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = {expf(best_t * logf(attenuation.r)), expf(best_t * logf(attenuation.g)), expf(best_t * logf(attenuation.b))};
@@ -182,7 +211,7 @@ __global__ void renderKernel(camera_t camera) {
 
 				material_t best_material = kernel_materials[best_material_index];
 
-				ray_start = ray_start + ray_direction * best_t;
+				ray_start += ray_direction * best_t;
 				vec3 off_surface = best_normal * 0.0001f;
 
 				float effective_specular_weight;

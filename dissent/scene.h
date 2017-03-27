@@ -85,4 +85,8 @@ struct scene_t {
 		materials.back().volume.attenuation = attenuation;
 	}
 
+	void setScatter(float scatter) {
+		materials.back().volume.scatter = scatter;
+	}
+
 };
