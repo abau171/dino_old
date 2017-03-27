@@ -196,23 +196,31 @@ __global__ void renderKernel(camera_t camera) {
 
 			if (best_t > scatter_t) { // scatter
 
+				color3 attenuation = cur_volume.attenuation;
+				color3 beer = { // shortcut if any component is zero to get rid of fireflies
+					attenuation.r > 0.0f ? expf(scatter_t * logf(attenuation.r)) : 0.0f,
+					attenuation.g > 0.0f ? expf(scatter_t * logf(attenuation.g)) : 0.0f,
+					attenuation.b > 0.0f ? expf(scatter_t * logf(attenuation.b)) : 0.0f
+				};
+				running_absorption *= beer;
+
 				ray_start += ray_direction * scatter_t;
 				ray_direction = random_sphere(n);
 
-				color3 attenuation = cur_volume.attenuation;
-				color3 beer = {expf(scatter_t * logf(attenuation.r)), expf(scatter_t * logf(attenuation.g)), expf(scatter_t * logf(attenuation.b))};
-				running_absorption *= beer;
-
-			} else if (best_t < INFINITY) {
+			} else if (best_t < INFINITY) { // interact with surface
 
 				color3 attenuation = cur_volume.attenuation;
-				color3 beer = {expf(best_t * logf(attenuation.r)), expf(best_t * logf(attenuation.g)), expf(best_t * logf(attenuation.b))};
+				color3 beer = { // shortcut if any component is zero to get rid of fireflies
+					attenuation.r > 0.0f ? expf(best_t * logf(attenuation.r)) : 0.0f,
+					attenuation.g > 0.0f ? expf(best_t * logf(attenuation.g)) : 0.0f,
+					attenuation.b > 0.0f ? expf(best_t * logf(attenuation.b)) : 0.0f
+				};
 				running_absorption *= beer;
 
 				material_t best_material = kernel_materials[best_material_index];
 
 				ray_start += ray_direction * best_t;
-				vec3 off_surface = best_normal * 0.0001f;
+				vec3 off_surface = best_normal * 0.0001f; // add small amount to get off the surface (no shading acne)
 
 				float effective_specular_weight;
 
