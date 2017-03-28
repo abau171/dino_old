@@ -1,7 +1,9 @@
 #include <iostream>
+#include <ctime>
 
 #include "GL/glew.h"
 #include "GL/glut.h"
+#include "lodepng.h"
 
 #include "common.h"
 #include "geometry.h"
@@ -73,6 +75,55 @@ void updateImage() {
 
 }
 
+void saveImage(bool promptForName) {
+
+	std::vector<unsigned char> image_vector;
+	image_vector.resize(WIDTH * HEIGHT * 4);
+	for (int y = 0; y < HEIGHT; y++) {
+		for (int x = 0; x < WIDTH; x++) {
+			image_vector[4 * WIDTH * y + 4 * x + 0] = image_data[HEIGHT - y - 1][x][0];
+			image_vector[4 * WIDTH * y + 4 * x + 1] = image_data[HEIGHT - y - 1][x][1];
+			image_vector[4 * WIDTH * y + 4 * x + 2] = image_data[HEIGHT - y - 1][x][2];
+			image_vector[4 * WIDTH * y + 4 * x + 3] = 255;
+		}
+	}
+
+	std::vector<unsigned char> png;
+	unsigned int error = lodepng::encode(png, image_vector, WIDTH, HEIGHT);
+	if (error) {
+		std::cout << "PNG encode error: " << lodepng_error_text(error) << std::endl;
+		return;
+	}
+
+	time_t t = time(0);
+	struct tm now = *localtime(&t);
+	std::string filename =
+		std::to_string(now.tm_year + 1900) + "-" +
+		std::to_string(now.tm_mon) + "-" +
+		std::to_string(now.tm_mday) + "_" +
+		std::to_string(now.tm_hour) + "-" +
+		std::to_string(now.tm_min) + "-" +
+		std::to_string(now.tm_sec);
+
+	if (promptForName) {
+
+		std::cout << "Save file as ?.png: ";
+
+		std::string input_filename;
+		std::getline(std::cin, input_filename);
+		if (!input_filename.empty()) {
+			filename = input_filename;
+		}
+
+	}
+
+	filename.append(".png");
+
+	lodepng::save_file(png, filename);
+	std::cout << "'" << filename << "' saved." << std::endl;
+
+}
+
 void display() {
 
 	if (!paused) {
@@ -94,6 +145,12 @@ void keyboard(unsigned char key, int x, int y) {
 	case 'p':
 		paused = !paused;
 		glutPostRedisplay();
+		break;
+	case 'o':
+		saveImage(true);
+		break;
+	case 'O':
+		saveImage(false);
 		break;
 	case 'r':
 		clearRender();
