@@ -120,6 +120,32 @@ __device__ vec3 random_phong_hemi(float spec_power, int n) {
 
 }
 
+__device__ vec3 random_henyey_greenstein(float g, int n) {
+
+	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
+
+	float s = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+	float cos_theta;
+	if (g == 0.0f) {
+		cos_theta = s;
+	} else {
+		float g_2 = g * g;
+		float a = (1.0f - g_2) / (1.0f + g * s);
+		cos_theta = (1.0f + g_2 - a * a) / (2.0f * g);
+	}
+
+	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
+
+	float cos_phi = cosf(phi);
+	float sin_phi = sinf(phi);
+
+	return {
+		sin_theta * cos_phi,
+		cos_theta,
+		sin_theta * sin_phi
+	};
+}
+
 __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	float theta = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
 	float sqrtr = sqrtf(curand_uniform(&kernel_curand_state[n]));
@@ -205,7 +231,7 @@ __global__ void renderKernel(camera_t camera) {
 				running_absorption *= beer;
 
 				ray_start += ray_direction * scatter_t;
-				ray_direction = random_sphere(n);
+				ray_direction = random_henyey_greenstein(cur_volume.scatter_g, n).change_up(ray_direction);
 
 			} else if (best_t < INFINITY) { // interact with surface
 

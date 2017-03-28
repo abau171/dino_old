@@ -17,7 +17,7 @@ struct surface_t {
 };
 
 struct volume_t {
-	float refractive_index, scatter;
+	float refractive_index, scatter, scatter_g;
 	color3 attenuation;
 };
 
@@ -48,6 +48,7 @@ struct scene_t {
 			{0.0f, 0.0f, 0.0f}
 		}, {
 			1.0f,
+			0.0f,
 			0.0f,
 			{1.0f, 1.0f, 1.0f}
 		}});
@@ -85,8 +86,9 @@ struct scene_t {
 		materials.back().volume.attenuation = attenuation.gammaToLinear();
 	}
 
-	void setScatter(float scatter) {
+	void setScatter(float scatter, float scatter_g = 0.0f) {
 		materials.back().volume.scatter = scatter;
+		materials.back().volume.scatter_g = scatter_g;
 	}
 
 };
