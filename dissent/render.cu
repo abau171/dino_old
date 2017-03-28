@@ -66,65 +66,46 @@ __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& 
 
 }
 
-__device__ vec3 random_sphere(int n) {
+__device__ vec3 random_isotropic(float cos_theta, int n) {
 
 	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
-
-	float cos_theta = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
-	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
-
 	float cos_phi = cosf(phi);
 	float sin_phi = sinf(phi);
+
+	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
 
 	return {
 		sin_theta * cos_phi,
 		cos_theta,
 		sin_theta * sin_phi
 	};
+}
+
+__device__ vec3 random_sphere(int n) {
+
+	float cos_theta = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+	return random_isotropic(cos_theta, n);
 
 }
 
 __device__ vec3 random_hemi(int n) {
 
-	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
-
 	float cos_theta = curand_uniform(&kernel_curand_state[n]);
-	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
-
-	float cos_phi = cosf(phi);
-	float sin_phi = sinf(phi);
-
-	return {
-		sin_theta * cos_phi,
-		cos_theta,
-		sin_theta * sin_phi
-	};
+	return random_isotropic(cos_theta, n);
 
 }
 
 __device__ vec3 random_phong_hemi(float spec_power, int n) {
 
-	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
-
 	float cos_theta = powf(curand_uniform(&kernel_curand_state[n]), 1.0f / (spec_power + 1.0f));
-	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
-
-	float cos_phi = cosf(phi);
-	float sin_phi = sinf(phi);
-
-	return {
-		sin_theta * cos_phi,
-		cos_theta,
-		sin_theta * sin_phi
-	};
+	return random_isotropic(cos_theta, n);
 
 }
 
 __device__ vec3 random_henyey_greenstein(float g, int n) {
 
-	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
-
 	float s = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
+
 	float cos_theta;
 	if (g == 0.0f) {
 		cos_theta = s;
@@ -134,16 +115,8 @@ __device__ vec3 random_henyey_greenstein(float g, int n) {
 		cos_theta = (1.0f + g_2 - a * a) / (2.0f * g);
 	}
 
-	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
+	return random_isotropic(cos_theta, n);
 
-	float cos_phi = cosf(phi);
-	float sin_phi = sinf(phi);
-
-	return {
-		sin_theta * cos_phi,
-		cos_theta,
-		sin_theta * sin_phi
-	};
 }
 
 __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
