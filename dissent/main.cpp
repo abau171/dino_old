@@ -48,23 +48,24 @@ void initScene() {
 	scene.params.air_volume.attenuation = scene.params.air_volume.attenuation.gammaToLinear();
 
 	scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.4f, 0.4f, 0.3f});
+	scene.setDiffuse({0.5f, 0.5f, 0.5f});
 
-	scene.addSphere({-1.4f, 2.5f, 1.5f}, 1.2f);
-	scene.setSpecularWeight(0.1f);
-	scene.setSpecular({1.0f, 1.0f, 1.0f});
-	scene.setSpecularPower(10000.0f);
-	scene.setDiffuse({0.8f, 0.0f, 0.5f});
+	scene.addSphere({-1003.0f, 0.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({1.0f, 0.0f, 0.0f});
 
-	scene.addSphere({1.4f, 2.5f, 1.5f}, 1.2f);
-	scene.setSpecularWeight(0.05f);
-	scene.setSpecular({1.0f, 1.0f, 1.0f});
-	scene.setSpecularPower(10000.0f);
-	scene.setTransmissionWeight(1.0f);
-	scene.setAttenuation({0.8f, 0.0f, 0.5f});
-	scene.setScatter(5.0f, 0.0f);
+	scene.addSphere({1003.0f, 0.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({0.0f, 1.0f, 0.0f});
+
+	scene.addSphere({0.0f, 0.0f, 997.0f}, 1000.0f);
+	scene.setDiffuse({0.5f, 0.5f, 0.5f});
+
+	scene.addSphere({0.0f, 1006.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({0.5f, 0.5f, 0.5f});
 	
-	scene.addSphere({0.0f, 10.0f, 1.5f}, 2.0f);
+	scene.addSphere({-1.5f, 2.0f, -2.0f}, 0.5f);
+	scene.setDiffuse({0.5f, 0.5f, 0.5f});
+
+	scene.addSphere({2.0f, 2.0f, 0.0f}, 0.5f);
 	scene.setEmission({1.0f, 1.0f, 1.0f}, 20.0f);
 
 }

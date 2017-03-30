@@ -281,7 +281,7 @@ __global__ void renderKernel(camera_t camera) {
 				} else { // diffuse
 
 					ray_start += off_surface;
-					ray_direction = random_hemi(n).change_up(best_normal);
+					ray_direction = random_phong_hemi(1.0f, n).change_up(best_normal);
 					cur_volume = best_exiting ? best_material.volume : kernel_scene_params.air_volume;
 
 					final_color += running_absorption * best_material.surface.emission;
