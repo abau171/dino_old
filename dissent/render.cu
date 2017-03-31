@@ -5,6 +5,7 @@
 #include "GL/glew.h"
 #include "GL/glut.h"
 #include "cuda_runtime.h"
+#include "device_launch_parameters.h"
 #include "curand.h"
 #include "curand_kernel.h"
 #include "cuda_gl_interop.h"
@@ -51,15 +52,15 @@ __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
 	float discrim = (b * b) - (4.0f * a * c);
 	if (discrim < 0.0f) return -1.0f;
 
-	float sqrt_discrim = std::sqrtf(discrim);
+	float sqrt_discrim = sqrtf(discrim);
 	float t1 = (-b + sqrt_discrim) / (2.0f * a);
 	float t2 = (-b - sqrt_discrim) / (2.0f * a);
 
 	float t;
 	if (c < 0.0f) {
-		t = std::fmaxf(t1, t2);
+		t = fmaxf(t1, t2);
 	} else {
-		t = std::fminf(t1, t2);
+		t = fminf(t1, t2);
 	}
 	return t;
 
@@ -68,8 +69,8 @@ __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
 __device__ vec3 random_isotropic(float cos_theta, int n) {
 
 	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
-	float cos_phi = cosf(phi);
-	float sin_phi = sinf(phi);
+	float sin_phi, cos_phi;
+	__sincosf(phi, &sin_phi, &cos_phi);
 
 	float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
 
@@ -96,7 +97,7 @@ __device__ vec3 random_hemi(int n) {
 
 __device__ vec3 random_phong_hemi(float spec_power, int n) {
 
-	float cos_theta = powf(curand_uniform(&kernel_curand_state[n]), 1.0f / (spec_power + 1.0f));
+	float cos_theta = __powf(curand_uniform(&kernel_curand_state[n]), 1.0f / (spec_power + 1.0f));
 	return random_isotropic(cos_theta, n);
 
 }
@@ -120,8 +121,10 @@ __device__ vec3 random_henyey_greenstein(float g, int n) {
 
 __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	float theta = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
+	float sin_theta, cos_theta;
+	__sincosf(theta, &sin_theta, &cos_theta);
 	float sqrtr = sqrtf(curand_uniform(&kernel_curand_state[n]));
-	return ortho1 * sqrtr * sinf(theta) + ortho2 * sqrtr * cosf(theta);
+	return ortho1 * sqrtr * sin_theta + ortho2 * sqrtr * cos_theta;
 }
 
 __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_t* spheres, material_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
@@ -190,15 +193,15 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				}
 			}
 
-			float scatter_t = (cur_volume.scatter > 0.0f) ? -logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
+			float scatter_t = (cur_volume.scatter > 0.0f) ? -__logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
 
 			if (t > scatter_t) { // scatter
 
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
-					attenuation.r > 0.0f ? expf(scatter_t * logf(attenuation.r)) : 0.0f,
-					attenuation.g > 0.0f ? expf(scatter_t * logf(attenuation.g)) : 0.0f,
-					attenuation.b > 0.0f ? expf(scatter_t * logf(attenuation.b)) : 0.0f
+					attenuation.r > 0.0f ? expf(scatter_t * __logf(attenuation.r)) : 0.0f,
+					attenuation.g > 0.0f ? expf(scatter_t * __logf(attenuation.g)) : 0.0f,
+					attenuation.b > 0.0f ? expf(scatter_t * __logf(attenuation.b)) : 0.0f
 				};
 				running_absorption *= beer;
 
@@ -215,9 +218,9 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
-					attenuation.r > 0.0f ? expf(t * logf(attenuation.r)) : 0.0f,
-					attenuation.g > 0.0f ? expf(t * logf(attenuation.g)) : 0.0f,
-					attenuation.b > 0.0f ? expf(t * logf(attenuation.b)) : 0.0f
+					attenuation.r > 0.0f ? expf(t * __logf(attenuation.r)) : 0.0f,
+					attenuation.g > 0.0f ? expf(t * __logf(attenuation.g)) : 0.0f,
+					attenuation.b > 0.0f ? expf(t * __logf(attenuation.b)) : 0.0f
 				};
 				running_absorption *= beer;
 
