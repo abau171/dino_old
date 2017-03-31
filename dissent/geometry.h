@@ -7,6 +7,6 @@ struct sphere_t {
 	vec3 center;
 	float radius;
 
-	__device__ bool intersect(vec3 start, vec3 direction, float& t, vec3& normal, bool& exiting);
+	__device__ float sphere_t::intersect(vec3 start, vec3 direction);
 
 };

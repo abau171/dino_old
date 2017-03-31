@@ -41,7 +41,7 @@ __device__ sphere_t* kernel_spheres;
 __device__ material_t* kernel_materials;
 __device__ curandState* kernel_curand_state;
 
-__device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& normal, bool& exiting) {
+__device__ float sphere_t::intersect(vec3 start, vec3 direction) {
 
 	float a = direction.magnitude_2();
 	vec3 recentered = start - center;
@@ -50,26 +50,19 @@ __device__ bool sphere_t::intersect(vec3 start, vec3 direction, float& t, vec3& 
 	float c = recentered_radius_2 - (radius * radius);
 
 	float discrim = (b * b) - (4.0f * a * c);
-	if (discrim < 0.0f) return false;
+	if (discrim < 0.0f) return -1.0f;
 
 	float sqrt_discrim = std::sqrtf(discrim);
 	float t1 = (-b + sqrt_discrim) / (2.0f * a);
 	float t2 = (-b - sqrt_discrim) / (2.0f * a);
 
-	exiting = recentered_radius_2 < radius * radius;
-
-	if (exiting) {
+	float t;
+	if (c < 0.0f) {
 		t = std::fmaxf(t1, t2);
 	} else {
 		t = std::fminf(t1, t2);
 	}
-	if (t < 0.0f) return false;
-
-	vec3 surface_point = start + direction * t;
-	normal = (surface_point - center) / radius;
-	if (exiting) normal = -normal;
-
-	return true;
+	return t;
 
 }
 
@@ -178,29 +171,22 @@ __global__ void renderKernel(output_point_t* output_buffer, camera_t camera, int
 
 		for (int depth = 0; depth < MAX_DEPTH; depth++) {
 
-			float t;
-			vec3 normal;
-			bool exiting;
-
-			float best_t = INFINITY;
-			vec3 best_normal;
-			int best_material_index;
-			bool best_exiting;
+			float t = INFINITY;
+			int sphere_index = -1;
 
 			for (int i = 0; i < kernel_num_spheres; i++) {
-				if (kernel_spheres[i].intersect(ray_start, ray_direction, t, normal, exiting)) {
-					if (t < best_t) {
-						best_t = t;
-						best_normal = normal;
-						best_material_index = i;
-						best_exiting = exiting;
+				float test_t = kernel_spheres[i].intersect(ray_start, ray_direction);
+				if (test_t >= 0.0f) {
+					if (test_t < t) {
+						t = test_t;
+						sphere_index = i;
 					}
 				}
 			}
 
 			float scatter_t = (cur_volume.scatter > 0.0f) ? -logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
 
-			if (best_t > scatter_t) { // scatter
+			if (t > scatter_t) { // scatter
 
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
@@ -213,32 +199,38 @@ __global__ void renderKernel(output_point_t* output_buffer, camera_t camera, int
 				ray_start += ray_direction * scatter_t;
 				ray_direction = random_henyey_greenstein(cur_volume.scatter_g, n).change_up(ray_direction);
 
-			} else if (best_t < INFINITY) { // interact with surface
+			} else if (sphere_index != -1) { // interact with surface
+
+				vec3 surface_position = ray_start + ray_direction * t;
+				vec3 normal = (surface_position - kernel_spheres[sphere_index].center);
+				normal.normalize();
+				bool exiting = ray_direction.dot(normal) > 0.0f;
+				if (exiting) normal = -normal;
 
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
-					attenuation.r > 0.0f ? expf(best_t * logf(attenuation.r)) : 0.0f,
-					attenuation.g > 0.0f ? expf(best_t * logf(attenuation.g)) : 0.0f,
-					attenuation.b > 0.0f ? expf(best_t * logf(attenuation.b)) : 0.0f
+					attenuation.r > 0.0f ? expf(t * logf(attenuation.r)) : 0.0f,
+					attenuation.g > 0.0f ? expf(t * logf(attenuation.g)) : 0.0f,
+					attenuation.b > 0.0f ? expf(t * logf(attenuation.b)) : 0.0f
 				};
 				running_absorption *= beer;
 
-				material_t best_material = kernel_materials[best_material_index];
+				material_t material = kernel_materials[sphere_index];
 
-				ray_start += ray_direction * best_t;
-				vec3 off_surface = best_normal * 0.0001f; // add small amount to get off the surface (no shading acne)
+				ray_start += ray_direction * t;
+				vec3 off_surface = normal * 0.0001f; // add small amount to get off the surface (no shading acne)
 
 				float effective_specular_weight;
 
-				float n1 = best_exiting ? best_material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
-				float n2 = best_exiting ? kernel_scene_params.air_volume.refractive_index : best_material.volume.refractive_index;
+				float n1 = exiting ? material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
+				float n2 = exiting ? kernel_scene_params.air_volume.refractive_index : material.volume.refractive_index;
 				float ni = n1 / n2;
 
-				float cosi = -ray_direction.dot(best_normal);
+				float cosi = -ray_direction.dot(normal);
 				float sint_2 = ni * ni * (1 - cosi * cosi);
 				float cost = sqrtf(1 - sint_2);
 
-				if (best_material.surface.specular_weight > 0.0f) {
+				if (material.surface.specular_weight > 0.0f) {
 
 					if (sint_2 > 1) {
 						effective_specular_weight = 1.0f;
@@ -252,7 +244,7 @@ __global__ void renderKernel(output_point_t* output_buffer, camera_t camera, int
 							base = 1.0f - cost;
 						}
 						float r_schlick = r0 + (1 - r0) * base * base * base * base * base;
-						effective_specular_weight = best_material.surface.specular_weight + (1.0f - best_material.surface.specular_weight) * r_schlick;
+						effective_specular_weight = material.surface.specular_weight + (1.0f - material.surface.specular_weight) * r_schlick;
 					}
 				} else {
 					effective_specular_weight = 0.0f;
@@ -262,37 +254,37 @@ __global__ void renderKernel(output_point_t* output_buffer, camera_t camera, int
 
 					ray_start += off_surface;
 
-					if (best_material.surface.spec_power > 0.0f) { // Phong specular
+					if (material.surface.spec_power > 0.0f) { // Phong specular
 
-						vec3 ray_reflect = ray_direction.reflect(best_normal);
-						ray_direction = random_phong_hemi(best_material.surface.spec_power, n).change_up(ray_reflect);
+						vec3 ray_reflect = ray_direction.reflect(normal);
+						ray_direction = random_phong_hemi(material.surface.spec_power, n).change_up(ray_reflect);
 
 					} else { // perfect reflection
 
-						ray_direction = ray_direction.reflect(best_normal);
+						ray_direction = ray_direction.reflect(normal);
 
 					}
 
-					cur_volume = best_exiting ? best_material.volume : kernel_scene_params.air_volume;
+					cur_volume = exiting ? material.volume : kernel_scene_params.air_volume;
 
-					final_color += running_absorption * best_material.surface.emission;
-					running_absorption *= best_material.surface.specular;
+					final_color += running_absorption * material.surface.emission;
+					running_absorption *= material.surface.specular;
 
-				} else if (curand_uniform(&kernel_curand_state[n]) < best_material.surface.transmission_weight) { // refract
+				} else if (curand_uniform(&kernel_curand_state[n]) < material.surface.transmission_weight) { // refract
 
 					ray_start -= off_surface;
-					ray_direction = ray_direction * ni + best_normal * (ni * cosi - cost);
+					ray_direction = ray_direction * ni + normal * (ni * cosi - cost);
 					ray_direction.normalize();
-					cur_volume = best_exiting ? kernel_scene_params.air_volume : best_material.volume;
+					cur_volume = exiting ? kernel_scene_params.air_volume : material.volume;
 
 				} else { // diffuse
 
 					ray_start += off_surface;
-					ray_direction = random_phong_hemi(1.0f, n).change_up(best_normal);
-					cur_volume = best_exiting ? best_material.volume : kernel_scene_params.air_volume;
+					ray_direction = random_phong_hemi(1.0f, n).change_up(normal);
+					cur_volume = exiting ? material.volume : kernel_scene_params.air_volume;
 
-					final_color += running_absorption * best_material.surface.emission;
-					running_absorption *= best_material.surface.diffuse;
+					final_color += running_absorption * material.surface.emission;
+					running_absorption *= material.surface.diffuse;
 
 				}
 
