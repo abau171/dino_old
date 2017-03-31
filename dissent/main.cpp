@@ -70,12 +70,6 @@ void initScene() {
 
 }
 
-void updateImage() {
-
-	if (!render((unsigned char*) image_data, camera)) return;
-
-}
-
 void saveImage(bool promptForName) {
 
 	std::vector<unsigned char> image_vector;
@@ -125,12 +119,20 @@ void saveImage(bool promptForName) {
 
 }
 
-void display() {
+void tick(int) {
+
+	std::cout << "tick" << std::endl;
 
 	if (!paused) {
-		updateImage();
+		render((unsigned char*) image_data, camera);
 		glutPostRedisplay();
 	}
+
+	glutTimerFunc(1, tick, 0);
+
+}
+
+void display() {
 
 	glDrawPixels(WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image_data);
 	glutSwapBuffers();
@@ -188,6 +190,8 @@ int main(int argc, char** argv) {
 
 	glutDisplayFunc(display);
 	glutKeyboardFunc(keyboard);
+
+	tick(0);
 
 	glutMainLoop();
 

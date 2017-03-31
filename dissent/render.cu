@@ -169,7 +169,7 @@ __global__ void renderKernel(camera_t camera) {
 
 		volume_t cur_volume = kernel_scene_params.air_volume;
 
-		for (int depth = 0; depth < 40; depth++) {
+		for (int depth = 0; depth < 4; depth++) {
 
 			float t;
 			vec3 normal;
