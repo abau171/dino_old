@@ -18,14 +18,13 @@
 #define MAX_DEPTH 4
 
 static const unsigned int BLOCK_DIM = 16;
-static const unsigned int RESET_DIM = BLOCK_DIM * BLOCK_DIM;
 
 static int render_width, render_height, render_n;
 static int render_count;
 static bool should_clear = false;
 
 static color3* dev_render_buffer;
-static output_point_t* dev_output_buffer;
+static float* dev_output_buffer;
 
 static GLuint gl_image_buffer;
 
@@ -125,30 +124,37 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sinf(theta) + ortho2 * sqrtr * cosf(theta);
 }
 
-__global__ void resetRenderKernel(output_point_t* output_buffer, color3* render_buffer, curandState* curand_state, sphere_t* spheres, material_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
+__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_t* spheres, material_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
 
-	int t = blockDim.x * blockIdx.x + threadIdx.x;
-	int render_n = render_width * render_height;
+	int x = blockDim.x * blockIdx.x + threadIdx.x;
+	int y = blockDim.y * blockIdx.y + threadIdx.y;
 
-	if (t == 0) {
-		kernel_render_width = render_width;
-		kernel_render_height = render_height;
-		kernel_render_n = render_n;
-		kernel_render_buffer = render_buffer;
-		kernel_scene_params = scene_params;
-		kernel_num_spheres = num_spheres;
-		kernel_spheres = spheres;
-		kernel_materials = surfaces;
-		kernel_curand_state = curand_state;
-	}
+	if (x < render_width && y < render_height) {
 
-	if (t < render_n) {
-		curand_init(t, 0, 0, &curand_state[t]);
+		int n = render_height * x + y;
+
+		if (n == 0) {
+			kernel_render_width = render_width;
+			kernel_render_height = render_height;
+			kernel_render_n = render_width * render_height;
+			kernel_render_buffer = render_buffer;
+			kernel_scene_params = scene_params;
+			kernel_num_spheres = num_spheres;
+			kernel_spheres = spheres;
+			kernel_materials = surfaces;
+			kernel_curand_state = curand_state;
+		}
+
+		curand_init(n, 0, 0, &curand_state[n]);
+
+		output_buffer[render_width * render_height + 2 * n + 0] = x;
+		output_buffer[render_width * render_height + 2 * n + 1] = y;
+
 	}
 
 }
 
-__global__ void renderKernel(output_point_t* output_buffer, camera_t camera, int render_count) {
+__global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int render_count) {
 
 	int x = BLOCK_DIM * blockIdx.x + threadIdx.x;
 	int y = BLOCK_DIM * blockIdx.y + threadIdx.y;
@@ -307,11 +313,10 @@ __global__ void renderKernel(output_point_t* output_buffer, camera_t camera, int
 		};
 
 		output_buffer[n] = {
-			(float) x,
-			(float) y,
 			(unsigned char) output_color.r,
 			(unsigned char) output_color.g,
-			(unsigned char) output_color.b
+			(unsigned char) output_color.b,
+			255
 		};
 
 	}
@@ -351,11 +356,6 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
-	if (cudaMalloc(&dev_output_buffer, render_n * sizeof(output_point_t)) != cudaSuccess) {
-		std::cout << "Cannot allocate enough GPU memory." << std::endl;
-		return false;
-	}
-
 	if (cudaMalloc(&dev_spheres, scene.spheres.size() * sizeof(sphere_t)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
@@ -381,10 +381,19 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
-	int blocks = (render_n + RESET_DIM - 1) / RESET_DIM;
-	int threads_per_block = RESET_DIM;
-	resetRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_materials, render_width, render_height, scene.params, scene.spheres.size());
 	cudaError_t cudaStatus;
+
+	cudaStatus = cudaGLRegisterBufferObject(gl_image_buffer);
+	if (cudaStatus != cudaSuccess) {
+		std::cout << "Error registering OpenGL buffer: " << cudaGetErrorString(cudaStatus) << std::endl;
+		return false;
+	}
+
+	cudaGLMapBufferObject((void**) &dev_output_buffer, gl_image_buffer);
+
+	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
+	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
+	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_materials, render_width, render_height, scene.params, scene.spheres.size());
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {
@@ -398,11 +407,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
-	cudaStatus = cudaGLRegisterBufferObject(gl_image_buffer);
-	if (cudaStatus != cudaSuccess) {
-		std::cout << "Error registering OpenGL buffer: " << cudaGetErrorString(cudaStatus) << std::endl;
-		return false;
-	}
+	cudaGLUnmapBufferObject(gl_image_buffer);
 
 	return true;
 
@@ -422,7 +427,7 @@ bool render(camera_t& camera) {
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	renderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, camera, render_count);
+	renderKernel<<<blocks, threads_per_block>>>((output_color_t*) dev_output_buffer, camera, render_count);
 
 	cudaError_t cudaStatus;
 
@@ -452,11 +457,13 @@ void clearRender() {
 
 }
 
-output_point_t* downloadOutputBuffer() {
+output_color_t* downloadOutputBuffer() {
 
-	output_point_t* output_buffer = new output_point_t[render_n];
+	output_color_t* output_buffer = new output_color_t[render_n];
 
-	cudaMemcpy(output_buffer, dev_output_buffer, render_n * sizeof(output_point_t), cudaMemcpyDeviceToHost);
+	cudaGLMapBufferObject((void**) &dev_output_buffer, gl_image_buffer);
+	cudaMemcpy(output_buffer, dev_output_buffer, render_n * sizeof(output_color_t), cudaMemcpyDeviceToHost);
+	cudaGLUnmapBufferObject(gl_image_buffer);
 
 	return output_buffer;
 

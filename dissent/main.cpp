@@ -71,7 +71,7 @@ void initScene() {
 
 void saveImage(bool promptForName) {
 
-	output_point_t* output_buffer = downloadOutputBuffer();
+	output_color_t* output_buffer = downloadOutputBuffer();
 
 	std::vector<unsigned char> image_vector;
 	image_vector.resize(WIDTH * HEIGHT * 4);
@@ -81,7 +81,7 @@ void saveImage(bool promptForName) {
 			image_vector[4 * WIDTH * y + 4 * x + 0] = output_buffer[n].r;
 			image_vector[4 * WIDTH * y + 4 * x + 1] = output_buffer[n].g;
 			image_vector[4 * WIDTH * y + 4 * x + 2] = output_buffer[n].b;
-			image_vector[4 * WIDTH * y + 4 * x + 3] = 255;
+			image_vector[4 * WIDTH * y + 4 * x + 3] = output_buffer[n].a;
 		}
 	}
 
@@ -138,8 +138,8 @@ void display() {
 
 	glBindBuffer(GL_ARRAY_BUFFER, gl_image_buffer);
 
-	glVertexPointer(2, GL_FLOAT, 12, 0);
-	glColorPointer(4, GL_UNSIGNED_BYTE, 12, (GLvoid*) 8);
+	glVertexPointer(2, GL_FLOAT, sizeof(output_point_t), (GLvoid*) (WIDTH * HEIGHT * sizeof(float)));
+	glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(output_color_t), (GLvoid*) 0);
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_COLOR_ARRAY);
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
 
 	glGenBuffers(1, &gl_image_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, gl_image_buffer);
-	glBufferData(GL_ARRAY_BUFFER, WIDTH * HEIGHT * sizeof(output_point_t), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, WIDTH * HEIGHT * sizeof(output_color_t) + WIDTH * HEIGHT * sizeof(output_point_t), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	if (!initRender(WIDTH, HEIGHT, scene, gl_image_buffer)) return 1;
