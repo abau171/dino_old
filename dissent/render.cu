@@ -2,14 +2,20 @@
 
 #include <iostream>
 #include <cmath>
-
+#include "GL/glew.h"
+#include "GL/glut.h"
 #include "cuda_runtime.h"
 #include "curand.h"
 #include "curand_kernel.h"
+#include "cuda_gl_interop.h"
 
 #include "common.h"
 #include "geometry.h"
 #include "scene.h"
+
+#include "render.h"
+
+#define MAX_DEPTH 4
 
 static const unsigned int BLOCK_DIM = 16;
 static const unsigned int RESET_DIM = BLOCK_DIM * BLOCK_DIM;
@@ -18,13 +24,14 @@ static int render_width, render_height, render_n;
 static int render_count;
 static bool should_clear = false;
 
-static color3* render_buffer;
 static color3* dev_render_buffer;
+static output_point_t* dev_output_buffer;
 
-static sphere_t* dev_spheres;
-static material_t* dev_materials;
+static GLuint gl_image_buffer;
 
 static curandState* dev_curand_state;
+static sphere_t* dev_spheres;
+static material_t* dev_materials;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
@@ -125,7 +132,7 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sinf(theta) + ortho2 * sqrtr * cosf(theta);
 }
 
-__global__ void resetRenderKernel(color3* render_buffer, curandState* curand_state, sphere_t* spheres, material_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
+__global__ void resetRenderKernel(output_point_t* output_buffer, color3* render_buffer, curandState* curand_state, sphere_t* spheres, material_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
 
 	int t = blockDim.x * blockIdx.x + threadIdx.x;
 	int render_n = render_width * render_height;
@@ -148,7 +155,7 @@ __global__ void resetRenderKernel(color3* render_buffer, curandState* curand_sta
 
 }
 
-__global__ void renderKernel(camera_t camera) {
+__global__ void renderKernel(output_point_t* output_buffer, camera_t camera, int render_count) {
 
 	int x = BLOCK_DIM * blockIdx.x + threadIdx.x;
 	int y = BLOCK_DIM * blockIdx.y + threadIdx.y;
@@ -169,7 +176,7 @@ __global__ void renderKernel(camera_t camera) {
 
 		volume_t cur_volume = kernel_scene_params.air_volume;
 
-		for (int depth = 0; depth < 4; depth++) {
+		for (int depth = 0; depth < MAX_DEPTH; depth++) {
 
 			float t;
 			vec3 normal;
@@ -297,7 +304,23 @@ __global__ void renderKernel(camera_t camera) {
 
 		}
 
-		kernel_render_buffer[kernel_render_width * y + x] += final_color;
+		final_color += kernel_render_buffer[n];
+		kernel_render_buffer[n] = final_color;
+
+		color3 output_color = (final_color / (render_count + 1)).linearToGamma() * 255.0f;
+		output_color = {
+			fminf(255.0f, output_color.r),
+			fminf(255.0f, output_color.g),
+			fminf(255.0f, output_color.b),
+		};
+
+		output_buffer[n] = {
+			(float) x,
+			(float) y,
+			(unsigned char) output_color.r,
+			(unsigned char) output_color.g,
+			(unsigned char) output_color.b
+		};
 
 	}
 
@@ -314,28 +337,13 @@ bool clearRenderBuffer() {
 
 }
 
-bool downloadRenderBuffer() {
-
-	if (cudaMemcpy(render_buffer, dev_render_buffer, render_n * sizeof(color3), cudaMemcpyDeviceToHost) != cudaSuccess) {
-		std::cout << "Cannot download render buffer." << std::endl;
-		return false;
-	}
-
-	return true;
-
-}
-
-bool resetRender(int width, int height, scene_t& scene) {
+bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffer) {
 
 	render_width = width;
 	render_height = height;
 	render_n = render_width * render_height;
 	render_count = 0;
-
-	if (render_buffer != nullptr) {
-		delete render_buffer;
-	}
-	render_buffer = new color3[render_n];
+	gl_image_buffer = new_gl_image_buffer;
 
 	if (cudaSetDevice(0) != cudaSuccess) {
 		std::cout << "Cannot find CUDA device." << std::endl;
@@ -348,6 +356,11 @@ bool resetRender(int width, int height, scene_t& scene) {
 	}
 
 	if (!clearRenderBuffer()) {
+		return false;
+	}
+
+	if (cudaMalloc(&dev_output_buffer, render_n * sizeof(output_point_t)) != cudaSuccess) {
+		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
 	}
 
@@ -378,7 +391,7 @@ bool resetRender(int width, int height, scene_t& scene) {
 
 	int blocks = (render_n + RESET_DIM - 1) / RESET_DIM;
 	int threads_per_block = RESET_DIM;
-	resetRenderKernel<<<blocks, threads_per_block>>>(dev_render_buffer, dev_curand_state, dev_spheres, dev_materials, render_width, render_height, scene.params, scene.spheres.size());
+	resetRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_materials, render_width, render_height, scene.params, scene.spheres.size());
 	cudaError_t cudaStatus;
 
 	cudaStatus = cudaGetLastError();
@@ -393,11 +406,17 @@ bool resetRender(int width, int height, scene_t& scene) {
 		return false;
 	}
 
+	cudaStatus = cudaGLRegisterBufferObject(gl_image_buffer);
+	if (cudaStatus != cudaSuccess) {
+		std::cout << "Error registering OpenGL buffer: " << cudaGetErrorString(cudaStatus) << std::endl;
+		return false;
+	}
+
 	return true;
 
 }
 
-bool render(unsigned char* image_data, camera_t& camera) {
+bool render(camera_t& camera) {
 
 	if (should_clear) {
 		clearRenderBuffer();
@@ -407,9 +426,11 @@ bool render(unsigned char* image_data, camera_t& camera) {
 
 	render_count++;
 
+	cudaGLMapBufferObject((void**) &dev_output_buffer, gl_image_buffer);
+
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	renderKernel<<<blocks, threads_per_block>>>(camera);
+	renderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, camera, render_count);
 
 	cudaError_t cudaStatus;
 
@@ -425,16 +446,7 @@ bool render(unsigned char* image_data, camera_t& camera) {
 		return false;
 	}
 
-	if (!downloadRenderBuffer()) {
-		return false;
-	}
-
-	for (int i = 0; i < render_n; i++) {
-		color3 color = (render_buffer[i] / render_count).linearToGamma() * 256.0f;
-		image_data[3 * i] = fminf(color.r, 255.0f);
-		image_data[3 * i + 1] = fminf(color.g, 255.0f);
-		image_data[3 * i + 2] = fminf(color.b, 255.0f);
-	}
+	cudaGLUnmapBufferObject(gl_image_buffer);
 
 	std::cout << render_count << std::endl;
 
@@ -444,7 +456,16 @@ bool render(unsigned char* image_data, camera_t& camera) {
 
 void clearRender() {
 
-	render_count = 0;
 	should_clear = true;
+
+}
+
+output_point_t* downloadOutputBuffer() {
+
+	output_point_t* output_buffer = new output_point_t[render_n];
+
+	cudaMemcpy(output_buffer, dev_output_buffer, render_n * sizeof(output_point_t), cudaMemcpyDeviceToHost);
+
+	return output_buffer;
 
 }

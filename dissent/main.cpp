@@ -1,6 +1,5 @@
 #include <iostream>
 #include <ctime>
-
 #include "GL/glew.h"
 #include "GL/glut.h"
 #include "lodepng.h"
@@ -13,7 +12,7 @@
 static const int WIDTH = 640;
 static const int HEIGHT = 480;
 
-static unsigned char image_data[HEIGHT][WIDTH][3];
+GLuint gl_image_buffer;
 
 static camera_t camera;
 static scene_t scene;
@@ -62,23 +61,26 @@ void initScene() {
 	scene.addSphere({0.0f, 1006.0f, 0.0f}, 1000.0f);
 	scene.setDiffuse({0.5f, 0.5f, 0.5f});
 	
-	scene.addSphere({-1.5f, 2.0f, -2.0f}, 0.5f);
+	scene.addSphere({-1.5f, 2.0f, 0.0f}, 1.0f);
 	scene.setDiffuse({0.5f, 0.5f, 0.5f});
 
-	scene.addSphere({2.0f, 2.0f, 0.0f}, 0.5f);
-	scene.setEmission({1.0f, 1.0f, 1.0f}, 20.0f);
+	scene.addSphere({1.0f, 2.0f, 2.0f}, 1.0f);
+	scene.setEmission({1.0f, 1.0f, 1.0f}, 10.0f);
 
 }
 
 void saveImage(bool promptForName) {
 
+	output_point_t* output_buffer = downloadOutputBuffer();
+
 	std::vector<unsigned char> image_vector;
 	image_vector.resize(WIDTH * HEIGHT * 4);
 	for (int y = 0; y < HEIGHT; y++) {
 		for (int x = 0; x < WIDTH; x++) {
-			image_vector[4 * WIDTH * y + 4 * x + 0] = image_data[HEIGHT - y - 1][x][0];
-			image_vector[4 * WIDTH * y + 4 * x + 1] = image_data[HEIGHT - y - 1][x][1];
-			image_vector[4 * WIDTH * y + 4 * x + 2] = image_data[HEIGHT - y - 1][x][2];
+			int n = HEIGHT * x + (HEIGHT - y - 1);
+			image_vector[4 * WIDTH * y + 4 * x + 0] = output_buffer[n].r;
+			image_vector[4 * WIDTH * y + 4 * x + 1] = output_buffer[n].g;
+			image_vector[4 * WIDTH * y + 4 * x + 2] = output_buffer[n].b;
 			image_vector[4 * WIDTH * y + 4 * x + 3] = 255;
 		}
 	}
@@ -121,10 +123,8 @@ void saveImage(bool promptForName) {
 
 void tick(int) {
 
-	std::cout << "tick" << std::endl;
-
 	if (!paused) {
-		render((unsigned char*) image_data, camera);
+		render(camera);
 		glutPostRedisplay();
 	}
 
@@ -134,7 +134,21 @@ void tick(int) {
 
 void display() {
 
-	glDrawPixels(WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, image_data);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBindBuffer(GL_ARRAY_BUFFER, gl_image_buffer);
+
+	glVertexPointer(2, GL_FLOAT, 12, 0);
+	glColorPointer(4, GL_UNSIGNED_BYTE, 12, (GLvoid*) 8);
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_COLOR_ARRAY);
+	glDrawArrays(GL_POINTS, 0, WIDTH * HEIGHT);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
 	glutSwapBuffers();
 
 }
@@ -181,12 +195,23 @@ void keyboard(unsigned char key, int x, int y) {
 int main(int argc, char** argv) {
 
 	initScene();
-	if (!resetRender(WIDTH, HEIGHT, scene)) return 1;
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
 	glutInitWindowSize(WIDTH, HEIGHT);
 	glutCreateWindow("Dissent Path Tracer");
+
+	glewInit();
+
+	glMatrixMode(GL_PROJECTION);
+	gluOrtho2D(0.0f, WIDTH, 0.0f, HEIGHT);
+
+	glGenBuffers(1, &gl_image_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, gl_image_buffer);
+	glBufferData(GL_ARRAY_BUFFER, WIDTH * HEIGHT * sizeof(output_point_t), nullptr, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	if (!initRender(WIDTH, HEIGHT, scene, gl_image_buffer)) return 1;
 
 	glutDisplayFunc(display);
 	glutKeyboardFunc(keyboard);
