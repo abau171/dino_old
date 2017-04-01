@@ -66,6 +66,10 @@ struct scene_t {
 		triangles.push_back({a, ab, ac});
 	}
 
+	void addTriangle(triangle_t tri) {
+		triangles.push_back(tri);
+	}
+
 	void setSpecularWeight(float specular_weight) {
 		spheres.back().material.surface.specular_weight = specular_weight;
 	}

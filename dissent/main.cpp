@@ -8,6 +8,7 @@
 #include "geometry.h"
 #include "scene.h"
 #include "render.h"
+#include "obj.h"
 
 static const int WIDTH = 640;
 static const int HEIGHT = 480;
@@ -46,27 +47,30 @@ void initScene() {
 	scene.params.air_volume = {1.0f, 0.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
 	scene.params.air_volume.attenuation = scene.params.air_volume.attenuation.gammaToLinear();
 
-	scene.addTriangle({-2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, {2.0f, 4.0f, 4.0f});
+	std::vector<triangle_t> triangles = loadObj("teapot.obj", 0.025f);
+	for (int i = 0; i < triangles.size(); i++) {
+		scene.addTriangle(triangles[i]);
+	}
 
-	scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.5f, 0.5f, 0.5f});
+	//scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
+	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
 
-	scene.addSphere({-1003.0f, 0.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({1.0f, 0.0f, 0.0f});
+	//scene.addSphere({-1003.0f, 0.0f, 0.0f}, 1000.0f);
+	//scene.setDiffuse({1.0f, 0.0f, 0.0f});
 
-	scene.addSphere({1003.0f, 0.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.0f, 1.0f, 0.0f});
+	//scene.addSphere({1003.0f, 0.0f, 0.0f}, 1000.0f);
+	//scene.setDiffuse({0.0f, 1.0f, 0.0f});
 
-	scene.addSphere({0.0f, 0.0f, 997.0f}, 1000.0f);
-	scene.setDiffuse({0.5f, 0.5f, 0.5f});
+	//scene.addSphere({0.0f, 0.0f, 997.0f}, 1000.0f);
+	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
 
-	scene.addSphere({0.0f, 1006.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.5f, 0.5f, 0.5f});
-	
-	scene.addSphere({-1.5f, 2.0f, 0.0f}, 1.0f);
-	scene.setDiffuse({0.5f, 0.5f, 0.5f});
+	//scene.addSphere({0.0f, 1006.0f, 0.0f}, 1000.0f);
+	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
+	//
+	//scene.addSphere({-1.5f, 2.0f, 0.0f}, 1.0f);
+	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
 
-	scene.addSphere({1.0f, 2.0f, 2.0f}, 1.0f);
+	scene.addSphere({0.0f, 4.0f, 0.0f}, 1.0f);
 	scene.setEmission({1.0f, 1.0f, 1.0f}, 10.0f);
 
 }
