@@ -123,12 +123,14 @@ __device__ float aabb_t::intersect(vec3 start, vec3 direction) {
 	t_max = fminf(t_max, fmaxf(td1, td2));
 	t_min = fmaxf(t_min, fminf(td1, td2));
 
-	if (t_max < 0.0) {
+	if (t_max < 0.0f) {
 		return -1.0f;
-	} else if (t_min < 0.0) {
-		return t_max;
-	} else {
+	} else if (t_min < 0.0f) {
+		return 0.0f;
+	} else if (t_max > t_min) {
 		return t_min;
+	} else {
+		return -1.0f;
 	}
 
 }
@@ -208,10 +210,10 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 		bvh_node_t node = bvh[stack[stack_index]];
 		stack_index--;
 
-		if (node.is_leaf) {
+		float bound_t = node.bound.intersect(ray_start, ray_direction);
+		if (bound_t < 0.0f || bound_t >= t) continue;
 
-			float bound_t = node.bound.intersect(ray_start, ray_direction);
-			if (bound_t < 0.0f || bound_t >= t) continue;
+		if (node.is_leaf) {
 
 			for (int i = tri_start + node.i0; i < tri_start + node.i1; i++) {
 
