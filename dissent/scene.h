@@ -37,6 +37,13 @@ struct model_t {
 	int tri_start, tri_end;
 };
 
+struct instance_t {
+	int model_index;
+	mat4 transform;
+	mat4 inv_transform;
+	material_t material;
+};
+
 struct scene_parameters_t {
 	volume_t air_volume;
 	color3 background_emission;
@@ -44,15 +51,21 @@ struct scene_parameters_t {
 };
 
 struct scene_t {
+
 	scene_parameters_t params;
+
+	material_t* last_material;
+	mat4* last_transform;
+	mat4* last_inv_transform;
+
 	std::vector<sphere_instance_t> spheres;
 	std::vector<triangle_t> triangles;
 	std::vector<model_t> models;
+	std::vector<instance_t> instances;
 
 	void addSphere(vec3 center, float radius) {
-		spheres.push_back({
-			{center, radius},
-			{{
+
+		material_t material = {{
 				0.0f,
 				0.0f,
 				0.0f,
@@ -64,67 +77,118 @@ struct scene_t {
 				0.0f,
 				0.0f,
 				{1.0f, 1.0f, 1.0f}
-			}}});
+			}};
+
+		spheres.push_back({
+			{center, radius},
+			material});
+
+		last_material = &spheres.back().material;
+
 	}
 
-	void addTriangle(vec3 a, vec3 b, vec3 c) {
-		vec3 ab = b - a;
-		vec3 ac = c - a;
-		triangles.push_back({a, ab, ac});
-	}
-
-	void addTriangle(triangle_t tri) {
-		triangles.push_back(tri);
-	}
-
-	void addModel(std::string filename, float scale=1.0f) {
+	int addModel(std::string filename) {
 
 		int tri_start = triangles.size();
 
-		std::vector<triangle_t> model_triangles = loadObj(filename, scale);
+		std::vector<triangle_t> model_triangles = loadObj(filename);
 		for (int i = 0; i < model_triangles.size(); i++) {
 			triangles.push_back(model_triangles[i]);
 		}
 
 		models.push_back({tri_start, tri_start + (int) model_triangles.size()});
+		return models.size() - 1;
+
+	}
+
+	void addInstance(int model_index) {
+
+		material_t material = {{
+				0.0f,
+				0.0f,
+				0.0f,
+				{0.0f, 0.0f, 0.0f},
+				{1.0f, 1.0f, 1.0f},
+				{0.0f, 0.0f, 0.0f}
+			}, {
+				1.0f,
+				0.0f,
+				0.0f,
+				{1.0f, 1.0f, 1.0f}
+			}};
+
+		instances.push_back({
+			model_index,
+			mat4_identity(),
+			mat4_identity(),
+			material});
+
+		last_material = &instances.back().material;
+		last_transform = &instances.back().transform;
+		last_inv_transform = &instances.back().inv_transform;
 
 	}
 
 	void setSpecularWeight(float specular_weight) {
-		spheres.back().material.surface.specular_weight = specular_weight;
+		last_material->surface.specular_weight = specular_weight;
 	}
 
 	void setTransmissionWeight(float transmission_weight) {
-		spheres.back().material.surface.transmission_weight = transmission_weight;
+		last_material->surface.transmission_weight = transmission_weight;
 	}
 
 	void setSpecularPower(float spec_power) {
-		spheres.back().material.surface.spec_power = spec_power;
+		last_material->surface.spec_power = spec_power;
 	}
 
 	void setRefractiveIndex(float refractive_index) {
-		spheres.back().material.volume.refractive_index = refractive_index;
+		last_material->volume.refractive_index = refractive_index;
 	}
 
 	void setDiffuse(color3 diffuse) {
-		spheres.back().material.surface.diffuse = diffuse.gammaToLinear();
+		last_material->surface.diffuse = diffuse.gammaToLinear();
 	}
 
 	void setSpecular(color3 specular) {
-		spheres.back().material.surface.specular = specular.gammaToLinear();
+		last_material->surface.specular = specular.gammaToLinear();
 	}
 
 	void setEmission(color3 emission, float emission_intensity) {
-		spheres.back().material.surface.emission = emission.gammaToLinear() * emission_intensity;
+		last_material->surface.emission = emission.gammaToLinear() * emission_intensity;
 	}
 
 	void setAttenuation(color3 attenuation) {
-		spheres.back().material.volume.attenuation = attenuation.gammaToLinear();
+		last_material->volume.attenuation = attenuation.gammaToLinear();
 	}
 
 	void setScatter(float scatter, float scatter_g = 0.0f) {
-		spheres.back().material.volume.scatter = scatter;
-		spheres.back().material.volume.scatter_g = scatter_g;
+		last_material->volume.scatter = scatter;
+		last_material->volume.scatter_g = scatter_g;
+	}
+
+	void translate(vec3 translation) {
+		*last_transform = mat4_translation(translation) * (*last_transform);
+		*last_inv_transform = last_transform->invert();
+	}
+
+	void scale(float scalar) {
+		*last_transform = mat4_scale(scalar) * (*last_transform);
+		*last_inv_transform = last_transform->invert();
+	}
+
+	void rotate_x(float radians) {
+		*last_transform = mat4_rotate_x(radians) * (*last_transform);
+		*last_inv_transform = last_transform->invert();
+	}
+
+	void rotate_y(float radians) {
+		*last_transform = mat4_rotate_y(radians) * (*last_transform);
+		*last_inv_transform = last_transform->invert();
+	}
+
+	void rotate_z(float radians) {
+		*last_transform = mat4_rotate_z(radians) * (*last_transform);
+		*last_inv_transform = last_transform->invert();
 	}
 
 };

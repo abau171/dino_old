@@ -19,7 +19,7 @@
 #define MAX_DEPTH 4
 
 #define SPHERE_TYPE 0
-#define TRIANGLE_TYPE 1
+#define INSTANCE_TYPE 1
 
 static const unsigned int BLOCK_DIM = 16;
 
@@ -36,14 +36,16 @@ static curandState* dev_curand_state;
 static sphere_instance_t* dev_spheres;
 static triangle_t* dev_triangles;
 static model_t* dev_models;
+static instance_t* dev_instances;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
 __device__ scene_parameters_t kernel_scene_params;
-__device__ int kernel_num_spheres, kernel_num_triangles, kernel_num_models;
+__device__ int kernel_num_spheres, kernel_num_triangles, kernel_num_models, kernel_num_instances;
 __device__ sphere_instance_t* kernel_spheres;
 __device__ triangle_t* kernel_triangles;
 __device__ model_t* kernel_models;
+__device__ instance_t* kernel_instances;
 __device__ curandState* kernel_curand_state;
 
 __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
@@ -155,7 +157,7 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sin_theta + ortho2 * sqrtr * cos_theta;
 }
 
-__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, model_t* models, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles, int num_models) {
+__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, model_t* models, instance_t* instances, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles, int num_models, int num_instances) {
 
 	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -176,6 +178,8 @@ __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, cu
 			kernel_triangles = triangles;
 			kernel_num_models = num_models;
 			kernel_models = models;
+			kernel_num_instances = num_instances;
+			kernel_instances = instances;
 			kernel_curand_state = curand_state;
 		}
 
@@ -213,27 +217,42 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 			float t = INFINITY;
 			int obj_index = -1;
+			int obj_subindex = -1;
 			int obj_type;
 
 			for (int i = 0; i < kernel_num_spheres; i++) {
+
 				float test_t = kernel_spheres[i].shape.intersect(ray_start, ray_direction);
+
 				if (test_t >= 0.0f && test_t < t) {
 					t = test_t;
 					obj_index = i;
 					obj_type = SPHERE_TYPE;
 				}
+
 			}
 
-			for (int i = 0; i < kernel_num_models; i++) {
-				model_t model = kernel_models[i];
+			for (int i = 0; i < kernel_num_instances; i++) {
+
+				instance_t instance = kernel_instances[i];
+				model_t model = kernel_models[instance.model_index];
+
+				vec3 trans_ray_start = instance.inv_transform * ray_start;
+				vec3 trans_ray_direction = instance.inv_transform.apply_rot(ray_direction);
+
 				for (int j = model.tri_start; j < model.tri_end; j++) {
-					float test_t = kernel_triangles[j].intersect(ray_start, ray_direction);
+
+					float test_t = kernel_triangles[j].intersect(trans_ray_start, trans_ray_direction);
+
 					if (test_t >= 0.0f && test_t < t) {
 						t = test_t;
-						obj_index = j;
-						obj_type = TRIANGLE_TYPE;
+						obj_index = i;
+						obj_subindex = j;
+						obj_type = INSTANCE_TYPE;
 					}
+
 				}
+
 			}
 
 			float scatter_t = (cur_volume.scatter > 0.0f) ? -__logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
@@ -260,21 +279,9 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				if (obj_type == SPHERE_TYPE) {
 					normal = (surface_position - kernel_spheres[obj_index].shape.center);
 					material = kernel_spheres[obj_index].material;
-				} else if (obj_type == TRIANGLE_TYPE) {
-					normal = kernel_triangles[obj_index].ab.cross(kernel_triangles[obj_index].ac);
-					material = {{
-							0.0f,
-							0.0f,
-							0.0f,
-							{0.5f, 0.5f, 1.0f},
-							{1.0f, 1.0f, 1.0f},
-							{0.0f, 0.0f, 0.0f}
-						}, {
-							1.0f,
-							0.0f,
-							0.0f,
-							{1.0f, 1.0f, 1.0f}
-						}};
+				} else if (obj_type == INSTANCE_TYPE) {
+					normal = kernel_triangles[obj_subindex].ab.cross(kernel_triangles[obj_subindex].ac);
+					material = kernel_instances[obj_index].material;
 				}
 				normal.normalize();
 				bool exiting = ray_direction.dot(normal) > 0.0f;
@@ -451,6 +458,16 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
+	if (cudaMalloc(&dev_instances, scene.instances.size() * sizeof(instance_t)) != cudaSuccess) {
+		std::cout << "Cannot allocate enough GPU memory." << std::endl;
+		return false;
+	}
+
+	if (cudaMemcpy(dev_instances, scene.instances.data(), scene.instances.size() * sizeof(instance_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+		std::cout << "Cannot upload instances." << std::endl;
+		return false;
+	}
+
 	if (cudaMalloc(&dev_curand_state, render_n * sizeof(curandState)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
@@ -468,7 +485,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, dev_models, render_width, render_height, scene.params, scene.spheres.size(), scene.triangles.size(), scene.models.size());
+	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, dev_models, dev_instances, render_width, render_height, scene.params, scene.spheres.size(), scene.triangles.size(), scene.models.size(), scene.instances.size());
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {

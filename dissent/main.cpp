@@ -9,6 +9,8 @@
 #include "scene.h"
 #include "render.h"
 
+#define CORNELL_BOX
+
 static const int WIDTH = 640;
 static const int HEIGHT = 480;
 
@@ -46,25 +48,38 @@ void initScene() {
 	scene.params.air_volume = {1.0f, 0.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
 	scene.params.air_volume.attenuation = scene.params.air_volume.attenuation.gammaToLinear();
 
-	scene.addModel("teapot.obj", 0.025);
+	int teapot_model_index = scene.addModel("teapot.obj");
 
-	//scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
-	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
+	scene.addInstance(teapot_model_index);
+	scene.setDiffuse({0.8f, 0.5f, 0.0f});
+	scene.scale(0.02f);
+	scene.rotate_y(-0.8f);
+	scene.translate({0.7f, 0.8f, 0.0f});
 
-	//scene.addSphere({-1003.0f, 0.0f, 0.0f}, 1000.0f);
-	//scene.setDiffuse({1.0f, 0.0f, 0.0f});
+#ifdef OTHER_TEAPOT
+	scene.addInstance(teapot_model_index);
+	scene.setDiffuse({0.8f, 0.0f, 0.5f});
+	scene.scale(0.01f);
+	scene.rotate_y(3.9416f);
+	scene.translate({-1.2f, 0.8f, 0.0f});
+#endif
 
-	//scene.addSphere({1003.0f, 0.0f, 0.0f}, 1000.0f);
-	//scene.setDiffuse({0.0f, 1.0f, 0.0f});
+#ifdef CORNELL_BOX
+	scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({0.5f, 0.5f, 0.5f});
 
-	//scene.addSphere({0.0f, 0.0f, 997.0f}, 1000.0f);
-	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
+	scene.addSphere({-1003.0f, 0.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({1.0f, 0.0f, 0.0f});
 
-	//scene.addSphere({0.0f, 1006.0f, 0.0f}, 1000.0f);
-	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
-	//
-	//scene.addSphere({-1.5f, 2.0f, 0.0f}, 1.0f);
-	//scene.setDiffuse({0.5f, 0.5f, 0.5f});
+	scene.addSphere({1003.0f, 0.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({0.0f, 1.0f, 0.0f});
+
+	scene.addSphere({0.0f, 0.0f, 997.0f}, 1000.0f);
+	scene.setDiffuse({0.5f, 0.5f, 0.5f});
+
+	scene.addSphere({0.0f, 1006.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({0.5f, 0.5f, 0.5f});
+#endif
 
 	scene.addSphere({0.0f, 4.0f, 0.0f}, 1.0f);
 	scene.setEmission({1.0f, 1.0f, 1.0f}, 10.0f);
