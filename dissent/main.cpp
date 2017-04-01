@@ -9,8 +9,6 @@
 #include "scene.h"
 #include "render.h"
 
-#define CORNELL_BOX
-
 static const int WIDTH = 640;
 static const int HEIGHT = 480;
 

@@ -6,6 +6,7 @@
 #include "common.h"
 #include "geometry.h"
 #include "obj.h"
+#include "bvh.h"
 
 struct camera_t {
 	vec3 position, forward, up, right;
@@ -35,6 +36,7 @@ struct sphere_instance_t {
 
 struct model_t {
 	int tri_start, tri_end;
+	bvh_node_t* bvh;
 };
 
 struct instance_t {
@@ -61,6 +63,7 @@ struct scene_t {
 	std::vector<sphere_instance_t> spheres;
 	std::vector<triangle_t> triangles;
 	std::vector<model_t> models;
+	std::vector<std::vector<bvh_node_t>> bvhs;
 	std::vector<instance_t> instances;
 
 	void addSphere(vec3 center, float radius) {
@@ -92,11 +95,27 @@ struct scene_t {
 		int tri_start = triangles.size();
 
 		std::vector<triangle_t> model_triangles = loadObj(filename);
+
+		std::vector<indexed_aabb_t> bounds;
 		for (int i = 0; i < model_triangles.size(); i++) {
-			triangles.push_back(model_triangles[i]);
+			indexed_aabb_t bound;
+			bound.aabb = model_triangles[i].getBound();
+			bound.index = i;
+			bounds.push_back(bound);
 		}
 
-		models.push_back({tri_start, tri_start + (int) model_triangles.size()});
+		int bvh_index = bvhs.size();
+		bvhs.push_back(std::vector<bvh_node_t>());
+		std::vector<int> indices;
+		buildBVH(bounds, bvhs[bvh_index], indices);
+
+		for (int i = 0; i < indices.size(); i++) {
+			triangles.push_back(model_triangles[indices[i]]);
+		}
+
+		std::cout << indices.size() << std::endl;
+
+		models.push_back({tri_start, tri_start + (int) indices.size()});
 		return models.size() - 1;
 
 	}

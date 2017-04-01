@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bvh.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="obj.cpp" />
   </ItemGroup>
@@ -26,6 +27,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bvh.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="geometry.h" />
     <ClInclude Include="obj.h" />

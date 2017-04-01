@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cmath>
+#include <vector>
 #include "GL/glew.h"
 #include "GL/glut.h"
 #include "cuda_runtime.h"
@@ -36,6 +37,7 @@ static curandState* dev_curand_state;
 static sphere_instance_t* dev_spheres;
 static triangle_t* dev_triangles;
 static model_t* dev_models;
+static std::vector<bvh_node_t*> dev_bvhs;
 static instance_t* dev_instances;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
@@ -93,6 +95,41 @@ __device__ float triangle_t::intersect(vec3 start, vec3 direction) {
 	float t = ac.dot(Q) * inv_det;
 
 	return (t > TRI_INT_EPSILON) ? t : -1.0f;
+
+}
+
+__device__ float aabb_t::intersect(vec3 start, vec3 direction) {
+
+	vec3 high_diff = high - start;
+	vec3 low_diff = low - start;
+
+	float td1, td2, t_max, t_min;
+
+	// X
+	td1 = high_diff.x / direction.x;
+	td2 = low_diff.x / direction.x;
+	t_max = fmaxf(td1, td2);
+	t_min = fminf(td1, td2);
+
+	// Y
+	td1 = high_diff.y / direction.y;
+	td2 = low_diff.y / direction.y;
+	t_max = fminf(t_max, fmaxf(td1, td2));
+	t_min = fmaxf(t_min, fminf(td1, td2));
+
+	// Z
+	td1 = high_diff.z / direction.z;
+	td2 = low_diff.z / direction.z;
+	t_max = fminf(t_max, fmaxf(td1, td2));
+	t_min = fmaxf(t_min, fminf(td1, td2));
+
+	if (t_max < 0.0) {
+		return -1.0f;
+	} else if (t_min < 0.0) {
+		return t_max;
+	} else {
+		return t_min;
+	}
 
 }
 
@@ -155,6 +192,51 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	__sincosf(theta, &sin_theta, &cos_theta);
 	float sqrtr = sqrtf(curand_uniform(&kernel_curand_state[n]));
 	return ortho1 * sqrtr * sin_theta + ortho2 * sqrtr * cos_theta;
+}
+
+__device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_direction, vec3 ray_start, int& tri_index) {
+
+	int stack[32];
+	int stack_index = 0;
+	stack[0] = 0;
+
+	float t = INFINITY;
+	int local_tri_index = -1;
+
+	while (stack_index >= 0) {
+
+		bvh_node_t node = bvh[stack[stack_index]];
+		stack_index--;
+
+		if (node.is_leaf) {
+
+			float bound_t = node.bound.intersect(ray_start, ray_direction);
+			if (bound_t < 0.0f || bound_t >= t) continue;
+
+			for (int i = tri_start + node.i0; i < tri_start + node.i1; i++) {
+
+				float test_t = kernel_triangles[i].intersect(ray_start, ray_direction);
+				if (test_t >= 0.0f && test_t < t) {
+					t = test_t;
+					local_tri_index = i;
+				}
+
+			}
+
+		} else {
+
+			stack_index++;
+			stack[stack_index] = node.i1;
+			stack_index++;
+			stack[stack_index] = node.i0;
+
+		}
+
+	}
+
+	tri_index = local_tri_index;
+	return t;
+
 }
 
 __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, model_t* models, instance_t* instances, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles, int num_models, int num_instances) {
@@ -240,17 +322,13 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				vec3 trans_ray_start = instance.inv_transform * ray_start;
 				vec3 trans_ray_direction = instance.inv_transform.apply_rot(ray_direction);
 
-				for (int j = model.tri_start; j < model.tri_end; j++) {
-
-					float test_t = kernel_triangles[j].intersect(trans_ray_start, trans_ray_direction);
-
-					if (test_t >= 0.0f && test_t < t) {
-						t = test_t;
-						obj_index = i;
-						obj_subindex = j;
-						obj_type = INSTANCE_TYPE;
-					}
-
+				int tri_index;
+				float test_t = intersect_bvh(model.bvh, model.tri_start, trans_ray_direction, trans_ray_start, tri_index);
+				if (tri_index >= 0 && test_t >= 0.0f && test_t < t) {
+					t = test_t;
+					obj_index = i;
+					obj_subindex = tri_index;
+					obj_type = INSTANCE_TYPE;
 				}
 
 			}
@@ -446,6 +524,25 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 	if (cudaMemcpy(dev_triangles, scene.triangles.data(), scene.triangles.size() * sizeof(triangle_t), cudaMemcpyHostToDevice) != cudaSuccess) {
 		std::cout << "Cannot upload triangles." << std::endl;
 		return false;
+	}
+
+	for (int i = 0; i < scene.bvhs.size(); i++) {
+
+		bvh_node_t* dev_bvh;
+
+		if (cudaMalloc(&dev_bvh, scene.bvhs[i].size() * sizeof(bvh_node_t)) != cudaSuccess) {
+			std::cout << "Cannot allocate enough GPU memory." << std::endl;
+			return false;
+		}
+
+		if (cudaMemcpy(dev_bvh, scene.bvhs[i].data(), scene.bvhs[i].size() * sizeof(bvh_node_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+			std::cout << "Cannot upload BVHs." << std::endl;
+			return false;
+		}
+
+		dev_bvhs.push_back(dev_bvh);
+		scene.models[i].bvh = dev_bvh;
+
 	}
 
 	if (cudaMalloc(&dev_models, scene.models.size() * sizeof(model_t)) != cudaSuccess) {
