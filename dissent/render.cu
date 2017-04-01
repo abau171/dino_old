@@ -30,15 +30,13 @@ static float* dev_output_buffer;
 static GLuint gl_image_buffer;
 
 static curandState* dev_curand_state;
-static sphere_t* dev_spheres;
-static material_t* dev_materials;
+static sphere_instance_t* dev_spheres;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
 __device__ scene_parameters_t kernel_scene_params;
 __device__ int kernel_num_spheres;
-__device__ sphere_t* kernel_spheres;
-__device__ material_t* kernel_materials;
+__device__ sphere_instance_t* kernel_spheres;
 __device__ curandState* kernel_curand_state;
 
 __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
@@ -127,7 +125,7 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sin_theta + ortho2 * sqrtr * cos_theta;
 }
 
-__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_t* spheres, material_t* surfaces, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
+__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
 
 	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -144,7 +142,6 @@ __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, cu
 			kernel_scene_params = scene_params;
 			kernel_num_spheres = num_spheres;
 			kernel_spheres = spheres;
-			kernel_materials = surfaces;
 			kernel_curand_state = curand_state;
 		}
 
@@ -184,7 +181,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 			int sphere_index = -1;
 
 			for (int i = 0; i < kernel_num_spheres; i++) {
-				float test_t = kernel_spheres[i].intersect(ray_start, ray_direction);
+				float test_t = kernel_spheres[i].shape.intersect(ray_start, ray_direction);
 				if (test_t >= 0.0f) {
 					if (test_t < t) {
 						t = test_t;
@@ -211,7 +208,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 			} else if (sphere_index != -1) { // interact with surface
 
 				vec3 surface_position = ray_start + ray_direction * t;
-				vec3 normal = (surface_position - kernel_spheres[sphere_index].center);
+				vec3 normal = (surface_position - kernel_spheres[sphere_index].shape.center);
 				normal.normalize();
 				bool exiting = ray_direction.dot(normal) > 0.0f;
 				if (exiting) normal = -normal;
@@ -224,7 +221,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				};
 				running_absorption *= beer;
 
-				material_t material = kernel_materials[sphere_index];
+				material_t material = kernel_spheres[sphere_index].material;
 
 				ray_start += ray_direction * t;
 				vec3 off_surface = normal * 0.0001f; // add small amount to get off the surface (no shading acne)
@@ -359,23 +356,13 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
-	if (cudaMalloc(&dev_spheres, scene.spheres.size() * sizeof(sphere_t)) != cudaSuccess) {
+	if (cudaMalloc(&dev_spheres, scene.spheres.size() * sizeof(sphere_instance_t)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
 	}
 
-	if (cudaMemcpy(dev_spheres, scene.spheres.data(), scene.spheres.size() * sizeof(sphere_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+	if (cudaMemcpy(dev_spheres, scene.spheres.data(), scene.spheres.size() * sizeof(sphere_instance_t), cudaMemcpyHostToDevice) != cudaSuccess) {
 		std::cout << "Cannot upload spheres." << std::endl;
-		return false;
-	}
-
-	if (cudaMalloc(&dev_materials, scene.spheres.size() * sizeof(material_t)) != cudaSuccess) {
-		std::cout << "Cannot allocate enough GPU memory." << std::endl;
-		return false;
-	}
-
-	if (cudaMemcpy(dev_materials, scene.materials.data(), scene.spheres.size() * sizeof(material_t), cudaMemcpyHostToDevice) != cudaSuccess) {
-		std::cout << "Cannot upload materials." << std::endl;
 		return false;
 	}
 
@@ -396,7 +383,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_materials, render_width, render_height, scene.params, scene.spheres.size());
+	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, render_width, render_height, scene.params, scene.spheres.size());
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {
