@@ -40,6 +40,7 @@ struct scene_parameters_t {
 struct scene_t {
 	scene_parameters_t params;
 	std::vector<sphere_instance_t> spheres;
+	std::vector<triangle_t> triangles;
 
 	void addSphere(vec3 center, float radius) {
 		spheres.push_back({
@@ -57,6 +58,12 @@ struct scene_t {
 				0.0f,
 				{1.0f, 1.0f, 1.0f}
 			}}});
+	}
+
+	void addTriangle(vec3 a, vec3 b, vec3 c) {
+		vec3 ab = b - a;
+		vec3 ac = c - a;
+		triangles.push_back({a, ab, ac});
 	}
 
 	void setSpecularWeight(float specular_weight) {

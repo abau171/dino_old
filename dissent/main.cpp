@@ -46,6 +46,8 @@ void initScene() {
 	scene.params.air_volume = {1.0f, 0.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
 	scene.params.air_volume.attenuation = scene.params.air_volume.attenuation.gammaToLinear();
 
+	scene.addTriangle({-2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, {2.0f, 4.0f, 4.0f});
+
 	scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
 	scene.setDiffuse({0.5f, 0.5f, 0.5f});
 

@@ -18,6 +18,9 @@
 
 #define MAX_DEPTH 4
 
+#define SPHERE_TYPE 0
+#define TRIANGLE_TYPE 1
+
 static const unsigned int BLOCK_DIM = 16;
 
 static int render_width, render_height, render_n;
@@ -31,12 +34,14 @@ static GLuint gl_image_buffer;
 
 static curandState* dev_curand_state;
 static sphere_instance_t* dev_spheres;
+static triangle_t* dev_triangles;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
 __device__ scene_parameters_t kernel_scene_params;
-__device__ int kernel_num_spheres;
+__device__ int kernel_num_spheres, kernel_num_triangles;
 __device__ sphere_instance_t* kernel_spheres;
+__device__ triangle_t* kernel_triangles;
 __device__ curandState* kernel_curand_state;
 
 __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
@@ -61,6 +66,29 @@ __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
 		t = fminf(t1, t2);
 	}
 	return t;
+
+}
+
+#define TRI_INT_EPSILON 0.000001f
+
+__device__ float triangle_t::intersect(vec3 start, vec3 direction) {
+
+	vec3 P = direction.cross(ac);
+	float det = ab.dot(P);
+	if (det > -TRI_INT_EPSILON && det < TRI_INT_EPSILON) return -1.0f;
+	float inv_det = 1.0f / det;
+
+	vec3 T = start - a;
+	float u = T.dot(P) * inv_det;
+	if (u < 0.0f || u > 1.0f) return -1.0f;
+
+	vec3 Q = T.cross(ab);
+	float v = Q.dot(direction) * inv_det;
+	if (v < 0.0f || u + v > 1.0f) return -1.0f;
+
+	float t = ac.dot(Q) * inv_det;
+
+	return (t > TRI_INT_EPSILON) ? t : -1.0f;
 
 }
 
@@ -125,7 +153,7 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sin_theta + ortho2 * sqrtr * cos_theta;
 }
 
-__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres) {
+__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles) {
 
 	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -142,6 +170,8 @@ __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, cu
 			kernel_scene_params = scene_params;
 			kernel_num_spheres = num_spheres;
 			kernel_spheres = spheres;
+			kernel_num_triangles = num_triangles;
+			kernel_triangles = triangles;
 			kernel_curand_state = curand_state;
 		}
 
@@ -178,15 +208,24 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 		for (int depth = 0; depth < MAX_DEPTH; depth++) {
 
 			float t = INFINITY;
-			int sphere_index = -1;
+			int obj_index = -1;
+			int obj_type;
 
 			for (int i = 0; i < kernel_num_spheres; i++) {
 				float test_t = kernel_spheres[i].shape.intersect(ray_start, ray_direction);
-				if (test_t >= 0.0f) {
-					if (test_t < t) {
-						t = test_t;
-						sphere_index = i;
-					}
+				if (test_t >= 0.0f && test_t < t) {
+					t = test_t;
+					obj_index = i;
+					obj_type = SPHERE_TYPE;
+				}
+			}
+
+			for (int i = 0; i < kernel_num_triangles; i++) {
+				float test_t = kernel_triangles[i].intersect(ray_start, ray_direction);
+				if (test_t >= 0.0f && test_t < t) {
+					t = test_t;
+					obj_index = i;
+					obj_type = TRIANGLE_TYPE;
 				}
 			}
 
@@ -205,10 +244,31 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				ray_start += ray_direction * scatter_t;
 				ray_direction = random_henyey_greenstein(cur_volume.scatter_g, n).change_up(ray_direction);
 
-			} else if (sphere_index != -1) { // interact with surface
+			} else if (obj_index != -1) { // interact with surface
 
 				vec3 surface_position = ray_start + ray_direction * t;
-				vec3 normal = (surface_position - kernel_spheres[sphere_index].shape.center);
+
+				vec3 normal;
+				material_t material;
+				if (obj_type == SPHERE_TYPE) {
+					normal = (surface_position - kernel_spheres[obj_index].shape.center);
+					material = kernel_spheres[obj_index].material;
+				} else if (obj_type == TRIANGLE_TYPE) {
+					normal = kernel_triangles[obj_index].ab.cross(kernel_triangles[obj_index].ac);
+					material = {{
+							0.0f,
+							0.0f,
+							0.0f,
+							{0.5f, 0.5f, 1.0f},
+							{1.0f, 1.0f, 1.0f},
+							{0.0f, 0.0f, 0.0f}
+						}, {
+							1.0f,
+							0.0f,
+							0.0f,
+							{1.0f, 1.0f, 1.0f}
+						}};
+				}
 				normal.normalize();
 				bool exiting = ray_direction.dot(normal) > 0.0f;
 				if (exiting) normal = -normal;
@@ -220,8 +280,6 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 					attenuation.b > 0.0f ? expf(t * __logf(attenuation.b)) : 0.0f
 				};
 				running_absorption *= beer;
-
-				material_t material = kernel_spheres[sphere_index].material;
 
 				ray_start += ray_direction * t;
 				vec3 off_surface = normal * 0.0001f; // add small amount to get off the surface (no shading acne)
@@ -366,6 +424,16 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
+	if (cudaMalloc(&dev_triangles, scene.triangles.size() * sizeof(triangle_t)) != cudaSuccess) {
+		std::cout << "Cannot allocate enough GPU memory." << std::endl;
+		return false;
+	}
+
+	if (cudaMemcpy(dev_triangles, scene.triangles.data(), scene.triangles.size() * sizeof(triangle_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+		std::cout << "Cannot upload triangles." << std::endl;
+		return false;
+	}
+
 	if (cudaMalloc(&dev_curand_state, render_n * sizeof(curandState)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
@@ -383,7 +451,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, render_width, render_height, scene.params, scene.spheres.size());
+	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, render_width, render_height, scene.params, scene.spheres.size(), scene.triangles.size());
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {
