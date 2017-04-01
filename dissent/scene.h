@@ -1,9 +1,11 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "common.h"
 #include "geometry.h"
+#include "obj.h"
 
 struct camera_t {
 	vec3 position, forward, up, right;
@@ -31,6 +33,10 @@ struct sphere_instance_t {
 	material_t material;
 };
 
+struct model_t {
+	int tri_start, tri_end;
+};
+
 struct scene_parameters_t {
 	volume_t air_volume;
 	color3 background_emission;
@@ -41,6 +47,7 @@ struct scene_t {
 	scene_parameters_t params;
 	std::vector<sphere_instance_t> spheres;
 	std::vector<triangle_t> triangles;
+	std::vector<model_t> models;
 
 	void addSphere(vec3 center, float radius) {
 		spheres.push_back({
@@ -68,6 +75,19 @@ struct scene_t {
 
 	void addTriangle(triangle_t tri) {
 		triangles.push_back(tri);
+	}
+
+	void addModel(std::string filename, float scale=1.0f) {
+
+		int tri_start = triangles.size();
+
+		std::vector<triangle_t> model_triangles = loadObj(filename, scale);
+		for (int i = 0; i < model_triangles.size(); i++) {
+			triangles.push_back(model_triangles[i]);
+		}
+
+		models.push_back({tri_start, tri_start + (int) model_triangles.size()});
+
 	}
 
 	void setSpecularWeight(float specular_weight) {

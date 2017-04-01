@@ -35,13 +35,15 @@ static GLuint gl_image_buffer;
 static curandState* dev_curand_state;
 static sphere_instance_t* dev_spheres;
 static triangle_t* dev_triangles;
+static model_t* dev_models;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
 __device__ scene_parameters_t kernel_scene_params;
-__device__ int kernel_num_spheres, kernel_num_triangles;
+__device__ int kernel_num_spheres, kernel_num_triangles, kernel_num_models;
 __device__ sphere_instance_t* kernel_spheres;
 __device__ triangle_t* kernel_triangles;
+__device__ model_t* kernel_models;
 __device__ curandState* kernel_curand_state;
 
 __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
@@ -153,7 +155,7 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sin_theta + ortho2 * sqrtr * cos_theta;
 }
 
-__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles) {
+__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, model_t* models, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles, int num_models) {
 
 	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -172,6 +174,8 @@ __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, cu
 			kernel_spheres = spheres;
 			kernel_num_triangles = num_triangles;
 			kernel_triangles = triangles;
+			kernel_num_models = num_models;
+			kernel_models = models;
 			kernel_curand_state = curand_state;
 		}
 
@@ -220,12 +224,15 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				}
 			}
 
-			for (int i = 0; i < kernel_num_triangles; i++) {
-				float test_t = kernel_triangles[i].intersect(ray_start, ray_direction);
-				if (test_t >= 0.0f && test_t < t) {
-					t = test_t;
-					obj_index = i;
-					obj_type = TRIANGLE_TYPE;
+			for (int i = 0; i < kernel_num_models; i++) {
+				model_t model = kernel_models[i];
+				for (int j = model.tri_start; j < model.tri_end; j++) {
+					float test_t = kernel_triangles[j].intersect(ray_start, ray_direction);
+					if (test_t >= 0.0f && test_t < t) {
+						t = test_t;
+						obj_index = j;
+						obj_type = TRIANGLE_TYPE;
+					}
 				}
 			}
 
@@ -434,6 +441,16 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
+	if (cudaMalloc(&dev_models, scene.models.size() * sizeof(model_t)) != cudaSuccess) {
+		std::cout << "Cannot allocate enough GPU memory." << std::endl;
+		return false;
+	}
+
+	if (cudaMemcpy(dev_models, scene.models.data(), scene.models.size() * sizeof(model_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+		std::cout << "Cannot upload models." << std::endl;
+		return false;
+	}
+
 	if (cudaMalloc(&dev_curand_state, render_n * sizeof(curandState)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
 		return false;
@@ -451,7 +468,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, render_width, render_height, scene.params, scene.spheres.size(), scene.triangles.size());
+	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, dev_models, render_width, render_height, scene.params, scene.spheres.size(), scene.triangles.size(), scene.models.size());
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {
