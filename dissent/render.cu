@@ -17,6 +17,10 @@
 
 #include "render.h"
 
+#define ENABLE_SSS
+#define ENABLE_ATTENUATION
+#define ENABLE_FRESNEL
+
 #define MAX_DEPTH 4
 
 #define SPHERE_TYPE 0
@@ -335,22 +339,25 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 			}
 
+#ifdef ENABLE_SSS
 			float scatter_t = (cur_volume.scatter > 0.0f) ? -__logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
 
 			if (t > scatter_t) { // scatter
 
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
-					attenuation.r > 0.0f ? expf(scatter_t * __logf(attenuation.r)) : 0.0f,
-					attenuation.g > 0.0f ? expf(scatter_t * __logf(attenuation.g)) : 0.0f,
-					attenuation.b > 0.0f ? expf(scatter_t * __logf(attenuation.b)) : 0.0f
+					attenuation.r > 0.0f ? __expf(scatter_t * __logf(attenuation.r)) : 0.0f,
+					attenuation.g > 0.0f ? __expf(scatter_t * __logf(attenuation.g)) : 0.0f,
+					attenuation.b > 0.0f ? __expf(scatter_t * __logf(attenuation.b)) : 0.0f
 				};
 				running_absorption *= beer;
 
 				ray_start += ray_direction * scatter_t;
 				ray_direction = random_henyey_greenstein(cur_volume.scatter_g, n).change_up(ray_direction);
 
-			} else if (obj_index != -1) { // interact with surface
+			} else
+#endif
+			if (obj_index != -1) { // interact with surface
 
 				vec3 surface_position = ray_start + ray_direction * t;
 
@@ -367,19 +374,22 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				bool exiting = ray_direction.dot(normal) > 0.0f;
 				if (exiting) normal = -normal;
 
+#ifdef ENABLE_ATTENUATION
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
-					attenuation.r > 0.0f ? expf(t * __logf(attenuation.r)) : 0.0f,
-					attenuation.g > 0.0f ? expf(t * __logf(attenuation.g)) : 0.0f,
-					attenuation.b > 0.0f ? expf(t * __logf(attenuation.b)) : 0.0f
+					attenuation.r > 0.0f ? __expf(t * __logf(attenuation.r)) : 0.0f,
+					attenuation.g > 0.0f ? __expf(t * __logf(attenuation.g)) : 0.0f,
+					attenuation.b > 0.0f ? __expf(t * __logf(attenuation.b)) : 0.0f
 				};
 				running_absorption *= beer;
+#endif
 
 				ray_start += ray_direction * t;
 				vec3 off_surface = normal * 0.0001f; // add small amount to get off the surface (no shading acne)
 
-				float effective_specular_weight;
+				float effective_specular_weight = material.surface.specular_weight;
 
+#ifdef ENABLE_FRESNEL
 				float n1 = exiting ? material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
 				float n2 = exiting ? kernel_scene_params.air_volume.refractive_index : material.volume.refractive_index;
 				float ni = n1 / n2;
@@ -390,7 +400,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 				if (material.surface.specular_weight > 0.0f) {
 
-					if (sint_2 > 1) {
+					if (sint_2 > 1.0f) {
 						effective_specular_weight = 1.0f;
 					} else {
 						float r0 = (n1 - n2) / (n1 + n2);
@@ -402,11 +412,12 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 							base = 1.0f - cost;
 						}
 						float r_schlick = r0 + (1 - r0) * base * base * base * base * base;
-						effective_specular_weight = material.surface.specular_weight + (1.0f - material.surface.specular_weight) * r_schlick;
+						effective_specular_weight += (1.0f - effective_specular_weight) * r_schlick;
 					}
 				} else {
 					effective_specular_weight = 0.0f;
 				}
+#endif
 
 				if (curand_uniform(&kernel_curand_state[n]) < effective_specular_weight) { // specular
 
@@ -429,6 +440,16 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 					running_absorption *= material.surface.specular;
 
 				} else if (curand_uniform(&kernel_curand_state[n]) < material.surface.transmission_weight) { // refract
+
+#ifndef ENABLE_FRESNEL
+					float n1 = exiting ? material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
+					float n2 = exiting ? kernel_scene_params.air_volume.refractive_index : material.volume.refractive_index;
+					float ni = n1 / n2;
+
+					float cosi = -ray_direction.dot(normal);
+					float sint_2 = ni * ni * (1 - cosi * cosi);
+					float cost = sqrtf(1 - sint_2);
+#endif
 
 					ray_start -= off_surface;
 					ray_direction = ray_direction * ni + normal * (ni * cosi - cost);
