@@ -30,7 +30,23 @@ static aabb_t encapsulateAABBs(std::vector<indexed_aabb_t>& aabbs) {
 
 }
 
-static void loadOverlapping(std::vector<indexed_aabb_t>& dest, aabb_t bound, std::vector<indexed_aabb_t>& src) {
+static int countOverlapping(aabb_t& bound, std::vector<indexed_aabb_t>& src) {
+
+	int count = 0;
+
+	for (int i = 0; i < src.size(); i++) {
+
+		if (bound.overlaps(src[i].aabb)) {
+			count++;
+		}
+
+	}
+
+	return count;
+
+}
+
+static void loadOverlapping(std::vector<indexed_aabb_t>& dest, aabb_t& bound, std::vector<indexed_aabb_t>& src) {
 
 	for (int i = 0; i < src.size(); i++) {
 
@@ -42,30 +58,77 @@ static void loadOverlapping(std::vector<indexed_aabb_t>& dest, aabb_t bound, std
 
 }
 
+static float calculateSAH(std::vector<indexed_aabb_t>& bounds, aabb_t& left_bound, aabb_t& right_bound) {
+
+	return left_bound.surface_area() * countOverlapping(left_bound, bounds) + right_bound.surface_area() * countOverlapping(right_bound, bounds);
+}
+
+#define SAH_SEGMENTS 100
+
 static void splitBound(aabb_t bound, std::vector<indexed_aabb_t>& bounds, aabb_t& left_bound, aabb_t& right_bound) {
 
-	vec3 boundDim = bound.high - bound.low;
+	float best_sah = INFINITY;
+	aabb_t best_left, best_right;
 
-	// TODO: split a little better than this
-	if (boundDim.x > boundDim.y && boundDim.x > boundDim.z) {
-		float split_x = (bound.low.x + bound.high.x) / 2.0f;
-		left_bound = bound;
-		left_bound.high.x = split_x;
-		right_bound = bound;
-		right_bound.low.x = split_x;
-	} else if (boundDim.y > boundDim.z) {
-		float split_y = (bound.low.y + bound.high.y) / 2.0f;
-		left_bound = bound;
-		left_bound.high.y = split_y;
-		right_bound = bound;
-		right_bound.low.y = split_y;
-	} else {
-		float split_z = (bound.low.z + bound.high.z) / 2.0f;
-		left_bound = bound;
-		left_bound.high.z = split_z;
-		right_bound = bound;
-		right_bound.low.z = split_z;
+	vec3 dim = bound.high - bound.low;
+
+	for (int i = 1; i < SAH_SEGMENTS; i++) {
+
+		float split_x = bound.low.x + (dim.x * i) / SAH_SEGMENTS;
+
+		aabb_t test_left = bound;
+		test_left.high.x = split_x;
+		aabb_t test_right = bound;
+		test_right.low.x = split_x;
+
+		float test_sah = calculateSAH(bounds, test_left, test_right);
+		if (test_sah < best_sah) {
+			best_sah = test_sah;
+			best_left = test_left;
+			best_right = test_right;
+		}
+
 	}
+
+	for (int i = 1; i < SAH_SEGMENTS; i++) {
+
+		float split_y = bound.low.y + (dim.y * i) / SAH_SEGMENTS;
+
+		aabb_t test_left = bound;
+		test_left.high.y = split_y;
+		aabb_t test_right = bound;
+		test_right.low.y = split_y;
+
+		float test_sah = calculateSAH(bounds, test_left, test_right);
+		if (test_sah < best_sah) {
+			best_sah = test_sah;
+			best_left = test_left;
+			best_right = test_right;
+		}
+
+	}
+
+	for (int i = 1; i < SAH_SEGMENTS; i++) {
+
+		float split_z = bound.low.z + (dim.z * i) / SAH_SEGMENTS;
+
+		aabb_t test_left = bound;
+		test_left.high.z = split_z;
+		aabb_t test_right = bound;
+		test_right.low.z = split_z;
+
+		float test_sah = calculateSAH(bounds, test_left, test_right);
+		if (test_sah < best_sah) {
+			best_sah = test_sah;
+			best_left = test_left;
+			best_right = test_right;
+		}
+
+	}
+
+	left_bound = best_left;
+	right_bound = best_right;
+
 }
 
 static bvh_construction_node_t* buildBVHRecursive(std::vector<indexed_aabb_t>& bounds) {

@@ -17,6 +17,11 @@ struct aabb_t {
 
 	}
 
+	float surface_area() {
+		vec3 dim = high - low;
+		return 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
+	}
+
 };
 
 struct sphere_t {
