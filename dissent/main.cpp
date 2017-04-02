@@ -9,6 +9,8 @@
 #include "scene.h"
 #include "render.h"
 
+#define TEAPOT
+
 static const int WIDTH = 640;
 static const int HEIGHT = 480;
 
@@ -48,11 +50,13 @@ void initScene() {
 
 	int teapot_model_index = scene.addModel("teapot.obj");
 
+#ifdef TEAPOT
 	scene.addInstance(teapot_model_index);
 	scene.setDiffuse({0.8f, 0.5f, 0.0f});
 	scene.scale(0.02f);
 	scene.rotate_y(-0.8f);
 	scene.translate({0.7f, 0.8f, 0.0f});
+#endif
 
 #ifdef OTHER_TEAPOT
 	scene.addInstance(teapot_model_index);

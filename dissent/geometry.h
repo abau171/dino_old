@@ -17,6 +17,16 @@ struct aabb_t {
 
 	}
 
+	bool centroidWithin(aabb_t other) {
+
+		vec3 centroid = (low + high) / 2.0f;
+		return
+			(centroid.x >= other.low.x && centroid.x <= other.high.x &&
+			centroid.y >= other.low.y && centroid.y <= other.high.y &&
+			centroid.z >= other.low.z && centroid.z <= other.high.z);
+
+	}
+
 	float surface_area() {
 		vec3 dim = high - low;
 		return 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);

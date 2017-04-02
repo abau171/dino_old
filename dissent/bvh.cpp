@@ -3,6 +3,7 @@
 
 #include "bvh.h"
 
+#define SAH_SEGMENTS 100
 
 struct bvh_construction_node_t {
 	bool is_leaf;
@@ -14,7 +15,9 @@ struct bvh_construction_node_t {
 
 static aabb_t encapsulateAABBs(std::vector<indexed_aabb_t>& aabbs) {
 
-	aabb_t encap = aabbs[0].aabb;
+	aabb_t encap;
+	encap.low = {INFINITY, INFINITY, INFINITY};
+	encap.high = {-INFINITY, -INFINITY, -INFINITY};
 
 	for (int i = 0; i < aabbs.size(); i++) {
 		aabb_t cur = aabbs[i].aabb;
@@ -30,44 +33,41 @@ static aabb_t encapsulateAABBs(std::vector<indexed_aabb_t>& aabbs) {
 
 }
 
-static int countOverlapping(aabb_t& bound, std::vector<indexed_aabb_t>& src) {
+static void countContaining(aabb_t& bound, std::vector<indexed_aabb_t>& src, int& contained, int& not_contained) {
 
-	int count = 0;
-
-	for (int i = 0; i < src.size(); i++) {
-
-		if (bound.overlaps(src[i].aabb)) {
-			count++;
-		}
-
-	}
-
-	return count;
-
-}
-
-static void loadOverlapping(std::vector<indexed_aabb_t>& dest, aabb_t& bound, std::vector<indexed_aabb_t>& src) {
+	contained = 0;
+	not_contained = 0;
 
 	for (int i = 0; i < src.size(); i++) {
 
-		if (bound.overlaps(src[i].aabb)) {
-			dest.push_back(src[i]);
+		if (src[i].aabb.centroidWithin(bound)) {
+			contained++;
+		} else {
+			not_contained++;
 		}
 
 	}
 
 }
 
-static float calculateSAH(std::vector<indexed_aabb_t>& bounds, aabb_t& left_bound, aabb_t& right_bound) {
+static void loadContaining(aabb_t& bound, std::vector<indexed_aabb_t>& src, std::vector<indexed_aabb_t>& dest_contained, std::vector<indexed_aabb_t>& dest_not) {
 
-	return left_bound.surface_area() * countOverlapping(left_bound, bounds) + right_bound.surface_area() * countOverlapping(right_bound, bounds);
+	for (int i = 0; i < src.size(); i++) {
+
+		if (src[i].aabb.centroidWithin(bound)) {
+			dest_contained.push_back(src[i]);
+		} else {
+			dest_not.push_back(src[i]);
+		}
+
+	}
+
 }
 
-#define SAH_SEGMENTS 100
+static bool splitBound(aabb_t bound, std::vector<indexed_aabb_t>& bounds, aabb_t& left_bound, aabb_t& right_bound) {
 
-static void splitBound(aabb_t bound, std::vector<indexed_aabb_t>& bounds, aabb_t& left_bound, aabb_t& right_bound) {
-
-	float best_sah = INFINITY;
+	float best_sah = bound.surface_area() * bounds.size();
+	bool do_split = false;
 	aabb_t best_left, best_right;
 
 	vec3 dim = bound.high - bound.low;
@@ -81,11 +81,16 @@ static void splitBound(aabb_t bound, std::vector<indexed_aabb_t>& bounds, aabb_t
 		aabb_t test_right = bound;
 		test_right.low.x = split_x;
 
-		float test_sah = calculateSAH(bounds, test_left, test_right);
+		int left_count, right_count;
+		countContaining(test_left, bounds, left_count, right_count);
+		if (left_count <= 1 || right_count <= 1) continue;
+
+		float test_sah = test_left.surface_area() * left_count + test_right.surface_area() * right_count;
 		if (test_sah < best_sah) {
 			best_sah = test_sah;
 			best_left = test_left;
 			best_right = test_right;
+			do_split = true;
 		}
 
 	}
@@ -99,11 +104,16 @@ static void splitBound(aabb_t bound, std::vector<indexed_aabb_t>& bounds, aabb_t
 		aabb_t test_right = bound;
 		test_right.low.y = split_y;
 
-		float test_sah = calculateSAH(bounds, test_left, test_right);
+		int left_count, right_count;
+		countContaining(test_left, bounds, left_count, right_count);
+		if (left_count <= 1 || right_count <= 1) continue;
+
+		float test_sah = test_left.surface_area() * left_count + test_right.surface_area() * right_count;
 		if (test_sah < best_sah) {
 			best_sah = test_sah;
 			best_left = test_left;
 			best_right = test_right;
+			do_split = true;
 		}
 
 	}
@@ -117,17 +127,27 @@ static void splitBound(aabb_t bound, std::vector<indexed_aabb_t>& bounds, aabb_t
 		aabb_t test_right = bound;
 		test_right.low.z = split_z;
 
-		float test_sah = calculateSAH(bounds, test_left, test_right);
+		int left_count, right_count;
+		countContaining(test_left, bounds, left_count, right_count);
+		if (left_count <= 1 || right_count <= 1) continue;
+
+		float test_sah = test_left.surface_area() * left_count + test_right.surface_area() * right_count;
 		if (test_sah < best_sah) {
 			best_sah = test_sah;
 			best_left = test_left;
 			best_right = test_right;
+			do_split = true;
 		}
 
 	}
 
-	left_bound = best_left;
-	right_bound = best_right;
+	if (do_split) {
+		left_bound = best_left;
+		right_bound = best_right;
+		return true;
+	} else {
+		return false;
+	}
 
 }
 
@@ -136,31 +156,27 @@ static bvh_construction_node_t* buildBVHRecursive(std::vector<indexed_aabb_t>& b
 	aabb_t bound = encapsulateAABBs(bounds);
 
 	aabb_t left_bound, right_bound;
+	bool do_split = splitBound(bound, bounds, left_bound, right_bound);
 
-	splitBound(bound, bounds, left_bound, right_bound);
+	if (do_split) {
 
-	std::vector<indexed_aabb_t> left_bounds;
-	loadOverlapping(left_bounds, left_bound, bounds);
+		std::vector<indexed_aabb_t> left_bounds, right_bounds;
+		loadContaining(left_bound, bounds, left_bounds, right_bounds);
 
-	std::vector<indexed_aabb_t> right_bounds;
-	loadOverlapping(right_bounds, right_bound, bounds);
-
-	if (left_bounds.size() == bounds.size() || right_bounds.size() == bounds.size()) {
-
-		bvh_construction_node_t* leaf = new bvh_construction_node_t();
-		leaf->is_leaf = true;
-		leaf->bound = bound;
-		leaf->bounds = bounds;
-		return leaf;
-
-	} else {
-
-		bvh_construction_node_t* inner = new bvh_construction_node_t();
+		bvh_construction_node_t* inner = new bvh_construction_node_t;
 		inner->is_leaf = false;
 		inner->bound = bound;
 		inner->left_child = buildBVHRecursive(left_bounds);
 		inner->right_child = buildBVHRecursive(right_bounds);
 		return inner;
+
+	} else {
+
+		bvh_construction_node_t* leaf = new bvh_construction_node_t;
+		leaf->is_leaf = true;
+		leaf->bound = bound;
+		leaf->bounds = bounds;
+		return leaf;
 
 	}
 
@@ -199,21 +215,11 @@ static void unpackDFS(std::vector<bvh_node_t>& bvh, std::vector<int>& indices, b
 
 }
 
-void printBVH(std::vector<bvh_node_t>& bvh) {
-	for (int i = 0; i < bvh.size(); i++) {
-		bvh_node_t node = bvh[i];
-		if (node.i1 & BVH_LEAF_MASK) {
-			std::cout << (node.i1 & BVH_I1_MASK) - node.i0 << std::endl;
-		}
-	}
-}
-
 void buildBVH(std::vector<indexed_aabb_t>& bounds, std::vector<bvh_node_t>& bvh, std::vector<int>& indices) {
 
 	bvh_construction_node_t* root = buildBVHRecursive(bounds);
 	unpackDFS(bvh, indices, root);
 
 	std::cout << "Converted " << bounds.size() << " bounding boxes into BVH with " << bvh.size() << " nodes and " << indices.size() << " bounding boxes." << std::endl;
-	//printBVH(bvh);
 
 }
