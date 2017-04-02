@@ -6,7 +6,7 @@ struct aabb_t {
 
 	vec3 low, high;
 
-	__device__ float aabb_t::intersect(vec3 start, vec3 direction);
+	__device__ float aabb_t::intersect(vec3 start, vec3 inv_direction);
 
 	bool overlaps(aabb_t other) {
 

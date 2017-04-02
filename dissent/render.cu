@@ -102,7 +102,7 @@ __device__ float triangle_t::intersect(vec3 start, vec3 direction) {
 
 }
 
-__device__ float aabb_t::intersect(vec3 start, vec3 direction) {
+__device__ float aabb_t::intersect(vec3 start, vec3 inv_direction) {
 
 	vec3 high_diff = high - start;
 	vec3 low_diff = low - start;
@@ -110,20 +110,20 @@ __device__ float aabb_t::intersect(vec3 start, vec3 direction) {
 	float td1, td2, t_max, t_min;
 
 	// X
-	td1 = high_diff.x / direction.x;
-	td2 = low_diff.x / direction.x;
+	td1 = high_diff.x * inv_direction.x;
+	td2 = low_diff.x * inv_direction.x;
 	t_max = fmaxf(td1, td2);
 	t_min = fminf(td1, td2);
 
 	// Y
-	td1 = high_diff.y / direction.y;
-	td2 = low_diff.y / direction.y;
+	td1 = high_diff.y * inv_direction.y;
+	td2 = low_diff.y * inv_direction.y;
 	t_max = fminf(t_max, fmaxf(td1, td2));
 	t_min = fmaxf(t_min, fminf(td1, td2));
 
 	// Z
-	td1 = high_diff.z / direction.z;
-	td2 = low_diff.z / direction.z;
+	td1 = high_diff.z * inv_direction.z;
+	td2 = low_diff.z * inv_direction.z;
 	t_max = fminf(t_max, fmaxf(td1, td2));
 	t_min = fmaxf(t_min, fminf(td1, td2));
 
@@ -209,12 +209,17 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 	float t = INFINITY;
 	int local_tri_index = -1;
 
+	vec3 inv_ray_direction;
+	inv_ray_direction.x = 1.0f / ray_direction.x;
+	inv_ray_direction.y = 1.0f / ray_direction.y;
+	inv_ray_direction.z = 1.0f / ray_direction.z;
+
 	while (stack_index >= 0) {
 
 		bvh_node_t node = bvh[stack[stack_index]];
 		stack_index--;
 
-		float bound_t = node.bound.intersect(ray_start, ray_direction);
+		float bound_t = node.bound.intersect(ray_start, inv_ray_direction);
 		if (bound_t < 0.0f || bound_t >= t) continue;
 
 		if (node.i1 & BVH_LEAF_MASK) {
