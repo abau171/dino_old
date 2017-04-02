@@ -12,6 +12,11 @@ struct obj_load_state_t {
 	std::vector<triangle_t> triangles;
 };
 
+static void extractDefinition(std::string definition, int& vertex_index) {
+	std::istringstream ss(definition);
+	ss >> vertex_index;
+}
+
 static void processLine(obj_load_state_t& load_state, std::string line) {
 
 	std::stringstream stream(line);
@@ -31,11 +36,18 @@ static void processLine(obj_load_state_t& load_state, std::string line) {
 	} else if (type_string.compare("f") == 0) {
 
 		int vertex_index;
-		stream >> vertex_index;
+		std::string definition;
+
+		stream >> definition;
+		extractDefinition(definition, vertex_index);
 		vec3 a = load_state.vertices[vertex_index - 1];
-		stream >> vertex_index;
+
+		stream >> definition;
+		extractDefinition(definition, vertex_index);
 		vec3 b = load_state.vertices[vertex_index - 1];
-		stream >> vertex_index;
+
+		stream >> definition;
+		extractDefinition(definition, vertex_index);
 		vec3 c = load_state.vertices[vertex_index - 1];
 
 		triangle_t triangle;
@@ -44,6 +56,23 @@ static void processLine(obj_load_state_t& load_state, std::string line) {
 		triangle.ac = c - a;
 
 		load_state.triangles.push_back(triangle);
+
+		int remaining = stream.tellg();
+		if (remaining != -1) {
+
+			stream >> definition;
+			extractDefinition(definition, vertex_index);
+			vec3 d = load_state.vertices[vertex_index - 1];
+
+
+			triangle_t triangle;
+			triangle.a = c;
+			triangle.ab = d - c;
+			triangle.ac = a - c;
+
+			load_state.triangles.push_back(triangle);
+
+		}
 
 	}
 

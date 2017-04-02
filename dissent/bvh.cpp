@@ -3,7 +3,7 @@
 
 #include "bvh.h"
 
-#define SAH_SEGMENTS 100
+#define SAH_SEGMENTS 10
 
 struct bvh_construction_node_t {
 	bool is_leaf;

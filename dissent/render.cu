@@ -370,12 +370,14 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				material_t material;
 				if (obj_type == SPHERE_TYPE) {
 					normal = (surface_position - kernel_spheres[obj_index].shape.center);
+					normal.normalize();
 					material = kernel_spheres[obj_index].material;
 				} else if (obj_type == INSTANCE_TYPE) {
 					normal = kernel_triangles[obj_subindex].ab.cross(kernel_triangles[obj_subindex].ac);
+					normal = kernel_instances[obj_index].transform.apply_rot(normal); // really need to apply inverse transpose to scale properly
+					normal.normalize();
 					material = kernel_instances[obj_index].material;
 				}
-				normal.normalize();
 				bool exiting = ray_direction.dot(normal) > 0.0f;
 				if (exiting) normal = -normal;
 
