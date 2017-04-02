@@ -176,7 +176,6 @@ static void unpackDFS(std::vector<bvh_node_t>& bvh, std::vector<int>& indices, b
 
 	if (cnode->is_leaf) {
 
-		node.is_leaf = true;
 		node.i0 = indices.size();
 
 		for (int i = 0; i < cnode->bounds.size(); i++) {
@@ -184,11 +183,9 @@ static void unpackDFS(std::vector<bvh_node_t>& bvh, std::vector<int>& indices, b
 			indices.push_back(bound.index);
 		}
 
-		node.i1 = indices.size();
+		node.i1 = BVH_LEAF_MASK | indices.size();
 
 	} else {
-
-		node.is_leaf = false;
 
 		node.i0 = bvh.size();
 		unpackDFS(bvh, indices, cnode->left_child);
@@ -205,8 +202,8 @@ static void unpackDFS(std::vector<bvh_node_t>& bvh, std::vector<int>& indices, b
 void printBVH(std::vector<bvh_node_t>& bvh) {
 	for (int i = 0; i < bvh.size(); i++) {
 		bvh_node_t node = bvh[i];
-		if (node.is_leaf) {
-			std::cout << node.i1 - node.i0 << std::endl;
+		if (node.i1 & BVH_LEAF_MASK) {
+			std::cout << (node.i1 & BVH_I1_MASK) - node.i0 << std::endl;
 		}
 	}
 }
@@ -215,6 +212,8 @@ void buildBVH(std::vector<indexed_aabb_t>& bounds, std::vector<bvh_node_t>& bvh,
 
 	bvh_construction_node_t* root = buildBVHRecursive(bounds);
 	unpackDFS(bvh, indices, root);
-	printBVH(bvh);
+
+	std::cout << "Converted " << bounds.size() << " bounding boxes into BVH with " << bvh.size() << " nodes and " << indices.size() << " bounding boxes." << std::endl;
+	//printBVH(bvh);
 
 }

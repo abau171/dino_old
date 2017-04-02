@@ -4,6 +4,9 @@
 
 #include "geometry.h"
 
+#define BVH_LEAF_MASK 0x80000000
+#define BVH_I1_MASK 0x7fffffff
+
 struct indexed_aabb_t {
 	aabb_t aabb;
 	int index;
@@ -11,7 +14,6 @@ struct indexed_aabb_t {
 
 struct bvh_node_t {
 
-	bool is_leaf;
 	aabb_t bound;
 
 	// If inner node, i0 and i1 are indices of left and right child nodes.

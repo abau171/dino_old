@@ -213,9 +213,9 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 		float bound_t = node.bound.intersect(ray_start, ray_direction);
 		if (bound_t < 0.0f || bound_t >= t) continue;
 
-		if (node.is_leaf) {
+		if (node.i1 & BVH_LEAF_MASK) {
 
-			for (int i = tri_start + node.i0; i < tri_start + node.i1; i++) {
+			for (int i = tri_start + node.i0; i < tri_start + (node.i1 & BVH_I1_MASK); i++) {
 
 				float test_t = kernel_triangles[i].intersect(ray_start, ray_direction);
 				if (test_t >= 0.0f && test_t < t) {
@@ -228,7 +228,7 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 		} else {
 
 			stack_index++;
-			stack[stack_index] = node.i1;
+			stack[stack_index] = (node.i1 & BVH_I1_MASK);
 			stack_index++;
 			stack[stack_index] = node.i0;
 
@@ -496,6 +496,11 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	if (cudaSetDevice(0) != cudaSuccess) {
 		std::cout << "Cannot find CUDA device." << std::endl;
+		return false;
+	}
+
+	if (cudaDeviceSetCacheConfig(cudaFuncCachePreferL1)) {
+		std::cout << "Could not set cache configuration." << std::endl;
 		return false;
 	}
 

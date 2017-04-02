@@ -113,8 +113,6 @@ struct scene_t {
 			triangles.push_back(model_triangles[indices[i]]);
 		}
 
-		std::cout << indices.size() << std::endl;
-
 		models.push_back({tri_start, tri_start + (int) indices.size()});
 		return models.size() - 1;
 
