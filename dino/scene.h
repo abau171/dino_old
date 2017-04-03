@@ -10,9 +10,23 @@
 
 struct camera_t {
 
-	float phi, theta;
 	vec3 position, forward, up, right;
-	float aspect_ratio;
+	float phi, theta, aspect_ratio, aperture_radius, focal_distance;
+
+	void init(vec3 new_position, float new_aspect_ratio, float new_aperture_radius = 0.0f, float new_focal_distance = 0.1f) {
+
+		position = new_position;
+		aspect_ratio = new_aspect_ratio;
+
+		aperture_radius = 0.0f;
+		updateApertureRadius(new_aperture_radius);
+
+		focal_distance = 0.0f;
+		updateFocalDistance(new_focal_distance);
+
+		set_rotation(0.0f, 0.0f);
+
+	}
 
 	void set_rotation(float new_phi, float new_theta) {
 
@@ -32,6 +46,18 @@ struct camera_t {
 	void rotate(float d_phi, float d_theta) {
 
 		set_rotation(phi + d_phi, theta + d_theta);
+
+	}
+
+	void updateApertureRadius(float d_radius) {
+
+		aperture_radius = fmaxf(0.0f, aperture_radius + d_radius);
+
+	}
+
+	void updateFocalDistance(float d_dist) {
+
+		focal_distance = fmaxf(0.1f, focal_distance + d_dist);
 
 	}
 
@@ -73,7 +99,6 @@ struct instance_t {
 struct scene_parameters_t {
 	volume_t air_volume;
 	color3 background_emission;
-	float aperture_radius, focal_distance;
 };
 
 struct scene_t {

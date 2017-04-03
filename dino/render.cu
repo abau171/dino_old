@@ -298,9 +298,10 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 		float screen_x = (x + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_width - 0.5f;
 		float screen_y = (y + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_height - 0.5f;
-		vec3 dof_confusion = confusion_disk(camera.up, camera.right, n) * kernel_scene_params.aperture_radius;
+
+		vec3 dof_confusion = confusion_disk(camera.up, camera.right, n) * camera.aperture_radius;
 		vec3 ray_start = camera.position + dof_confusion;
-		vec3 ray_direction = (camera.forward + camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y) * kernel_scene_params.focal_distance - dof_confusion;
+		vec3 ray_direction = (camera.forward + camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y) * camera.focal_distance - dof_confusion;
 		ray_direction.normalize();
 
 		color3 final_color = {0.0f, 0.0f, 0.0f};

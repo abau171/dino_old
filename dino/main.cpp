@@ -35,20 +35,21 @@ static bool s_key = false;
 static bool d_key = false;
 static bool r_key = false;
 static bool f_key = false;
+static bool t_key = false;
+static bool g_key = false;
+static bool y_key = false;
+static bool h_key = false;
 
 static bool do_clear = false;
 static bool paused = false;
 
 void initScene() {
 
-	camera.position = {0.0f, 4.0f, 7.0f};
-	camera.aspect_ratio = (float) WIDTH / HEIGHT;
+	camera.init({0.0f, 4.0f, 7.0f}, (float) WIDTH / HEIGHT);
 	camera.set_rotation(0.0f, -0.25f);
 
 	scene.params.background_emission = {0.4f, 0.6f, 0.9f};
 	scene.params.background_emission = scene.params.background_emission.gammaToLinear();
-	scene.params.aperture_radius = 0.0f;
-	scene.params.focal_distance = 8.6f;
 	scene.params.air_volume = {1.0f, 0.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
 	scene.params.air_volume.attenuation = scene.params.air_volume.attenuation.gammaToLinear();
 
@@ -211,6 +212,22 @@ static void cameraUpdate() {
 		camera.position.y -= speed;
 		do_clear = true;
 	}
+	if (t_key) {
+		camera.updateFocalDistance(speed);
+		do_clear = true;
+	}
+	if (g_key) {
+		camera.updateFocalDistance(-speed);
+		do_clear = true;
+	}
+	if (y_key) {
+		camera.updateApertureRadius(0.1f * speed);
+		do_clear = true;
+	}
+	if (h_key) {
+		camera.updateApertureRadius(-0.1f * speed);
+		do_clear = true;
+	}
 
 	if (do_clear) {
 		clearRender();
@@ -340,6 +357,18 @@ void keyboard(unsigned char key, int x, int y) {
 	case 'f':
 		f_key = true;
 		break;
+	case 't':
+		t_key = true;
+		break;
+	case 'g':
+		g_key = true;
+		break;
+	case 'y':
+		y_key = true;
+		break;
+	case 'h':
+		h_key = true;
+		break;
 	}
 
 }
@@ -364,6 +393,18 @@ void keyboardUp(unsigned char key, int x, int y) {
 		break;
 	case 'f':
 		f_key = false;
+		break;
+	case 't':
+		t_key = false;
+		break;
+	case 'g':
+		g_key = false;
+		break;
+	case 'y':
+		y_key = false;
+		break;
+	case 'h':
+		h_key = false;
 		break;
 	}
 
