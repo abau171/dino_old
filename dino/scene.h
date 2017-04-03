@@ -67,6 +67,7 @@ struct surface_t {
 	float specular_weight, transmission_weight; // first checks for specular reflection, if not then checks for transmission vs diffuse
 	float spec_power; // spec_power=0 means perfect reflection
 	color3 diffuse, specular, emission;
+	bool interpolate_normals;
 };
 
 struct volume_t {
@@ -111,6 +112,7 @@ struct scene_t {
 
 	std::vector<sphere_instance_t> spheres;
 	std::vector<triangle_t> triangles;
+	std::vector<triangle_extra_t> extras;
 	std::vector<model_t> models;
 	std::vector<std::vector<bvh_node_t>> bvhs;
 	std::vector<instance_t> instances;
@@ -143,7 +145,9 @@ struct scene_t {
 
 		int tri_start = (int) triangles.size();
 
-		std::vector<triangle_t> model_triangles = loadObj(filename);
+		std::vector<triangle_t> model_triangles;
+		std::vector<triangle_extra_t> model_extras;
+		loadObj(filename, model_triangles, model_extras);
 
 		std::vector<indexed_aabb_t> bounds;
 		for (int i = 0; i < model_triangles.size(); i++) {
@@ -160,6 +164,7 @@ struct scene_t {
 
 		for (int i = 0; i < indices.size(); i++) {
 			triangles.push_back(model_triangles[indices[i]]);
+			extras.push_back(model_extras[indices[i]]);
 		}
 
 		models.push_back({tri_start, tri_start + (int) indices.size()});
@@ -175,7 +180,8 @@ struct scene_t {
 				0.0f,
 				{0.0f, 0.0f, 0.0f},
 				{1.0f, 1.0f, 1.0f},
-				{0.0f, 0.0f, 0.0f}
+				{0.0f, 0.0f, 0.0f},
+				false
 			}, {
 				1.0f,
 				0.0f,
@@ -230,6 +236,10 @@ struct scene_t {
 	void setScatter(float scatter, float scatter_g = 0.0f) {
 		last_material->volume.scatter = scatter;
 		last_material->volume.scatter_g = scatter_g;
+	}
+
+	void setInterpolateNormals(bool interpolate) {
+		last_material->surface.interpolate_normals = interpolate;
 	}
 
 	void translate(vec3 translation) {

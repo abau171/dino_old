@@ -18,10 +18,6 @@
 
 #include "render.h"
 
-#define ENABLE_SSS
-#define ENABLE_ATTENUATION
-#define ENABLE_FRESNEL
-
 #define MAX_DEPTH 4
 
 #define SPHERE_TYPE 0
@@ -42,6 +38,7 @@ static GLuint gl_image_buffer;
 static curandState* dev_curand_state;
 static sphere_instance_t* dev_spheres;
 static triangle_t* dev_triangles;
+static triangle_extra_t* dev_extras;
 static model_t* dev_models;
 static std::vector<bvh_node_t*> dev_bvhs;
 static instance_t* dev_instances;
@@ -52,6 +49,7 @@ __device__ scene_parameters_t kernel_scene_params;
 __device__ int kernel_num_spheres, kernel_num_triangles, kernel_num_models, kernel_num_instances;
 __device__ sphere_instance_t* kernel_spheres;
 __device__ triangle_t* kernel_triangles;
+__device__ triangle_extra_t* kernel_extras;
 __device__ model_t* kernel_models;
 __device__ instance_t* kernel_instances;
 __device__ curandState* kernel_curand_state;
@@ -101,6 +99,30 @@ __device__ float triangle_t::intersect(vec3 start, vec3 direction) {
 	float t = ac.dot(Q) * inv_det;
 
 	return (t > TRI_INT_EPSILON) ? t : -1.0f;
+
+}
+
+__device__ void triangle_t::barycentric(vec3 point, float& u, float& v, float& w) {
+
+	vec3 ah = point - a;
+
+	float ab_ab = ab.dot(ab);
+	float ab_ac = ab.dot(ac);
+	float ac_ac = ac.dot(ac);
+	float ab_ah = ab.dot(ah);
+	float ac_ah = ac.dot(ah);
+
+	float inv_denom = 1.0f / (ab_ab * ac_ac - ab_ac * ab_ac);
+
+	v = (ac_ac * ab_ah - ab_ac * ac_ah) * inv_denom;
+	w = (ab_ab * ac_ah - ab_ac * ab_ah) * inv_denom;
+	u = 1.0f - v - w;
+
+}
+
+__device__ vec3 triangle_extra_t::interpolate_normals(float u, float v, float w) {
+
+	return an * u + bn * v + cn * w;
 
 }
 
@@ -252,7 +274,7 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 
 }
 
-__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, model_t* models, instance_t* instances, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles, int num_models, int num_instances) {
+__global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, triangle_extra_t* extras, model_t* models, instance_t* instances, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles, int num_models, int num_instances) {
 
 	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -271,6 +293,7 @@ __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, cu
 			kernel_spheres = spheres;
 			kernel_num_triangles = num_triangles;
 			kernel_triangles = triangles;
+			kernel_extras = extras;
 			kernel_num_models = num_models;
 			kernel_models = models;
 			kernel_num_instances = num_instances;
@@ -347,7 +370,6 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 			}
 
-#ifdef ENABLE_SSS
 			float scatter_t = (cur_volume.scatter > 0.0f) ? -__logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
 
 			if (t > scatter_t) { // scatter
@@ -363,28 +385,50 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				ray_start += ray_direction * scatter_t;
 				ray_direction = random_henyey_greenstein(cur_volume.scatter_g, n).change_up(ray_direction);
 
-			} else
-#endif
-			if (obj_index != -1) { // interact with surface
+			} else if (obj_index != -1) { // interact with surface
 
 				vec3 surface_position = ray_start + ray_direction * t;
 
-				vec3 normal;
 				material_t material;
+				vec3 normal, effective_normal;
 				if (obj_type == SPHERE_TYPE) {
+
+					material = kernel_spheres[obj_index].material;
+
 					normal = (surface_position - kernel_spheres[obj_index].shape.center);
 					normal.normalize();
-					material = kernel_spheres[obj_index].material;
+
+					effective_normal = normal;
+
 				} else if (obj_type == INSTANCE_TYPE) {
+
+					material = kernel_instances[obj_index].material;
+
+					vec3 model_surface_position = kernel_instances[obj_index].inv_transform * surface_position; // surface position in model space
+					float u, v, w;
+					kernel_triangles[obj_subindex].barycentric(model_surface_position, u, v, w);
+
 					normal = kernel_triangles[obj_subindex].ab.cross(kernel_triangles[obj_subindex].ac);
+					normal.normalize(); // don't need this when inverse transpose is used (see next comment)
 					normal = kernel_instances[obj_index].transform.apply_rot(normal); // really need to apply inverse transpose to scale properly
 					normal.normalize();
-					material = kernel_instances[obj_index].material;
+
+					if (material.surface.interpolate_normals) {
+						effective_normal = kernel_extras[obj_subindex].interpolate_normals(u, v, w);
+						effective_normal.normalize(); // don't need this when inverse transpose is used (see next comment)
+						effective_normal = kernel_instances[obj_index].transform.apply_rot(effective_normal); // really need to apply inverse transpose to scale properly
+						effective_normal.normalize();
+					} else {
+						effective_normal = normal;
+					}
+
 				}
 				bool exiting = ray_direction.dot(normal) > 0.0f;
-				if (exiting) normal = -normal;
+				if (exiting) {
+					normal = -normal;
+					effective_normal = -effective_normal;
+				}
 
-#ifdef ENABLE_ATTENUATION
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
 					attenuation.r > 0.0f ? __expf(t * __logf(attenuation.r)) : 0.0f,
@@ -392,19 +436,17 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 					attenuation.b > 0.0f ? __expf(t * __logf(attenuation.b)) : 0.0f
 				};
 				running_absorption *= beer;
-#endif
 
 				ray_start += ray_direction * t;
 				vec3 off_surface = normal * 0.0001f; // add small amount to get off the surface (no shading acne)
 
 				float effective_specular_weight = material.surface.specular_weight;
 
-#ifdef ENABLE_FRESNEL
 				float n1 = exiting ? material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
 				float n2 = exiting ? kernel_scene_params.air_volume.refractive_index : material.volume.refractive_index;
 				float ni = n1 / n2;
 
-				float cosi = -ray_direction.dot(normal);
+				float cosi = -ray_direction.dot(effective_normal);
 				float sint_2 = ni * ni * (1 - cosi * cosi);
 				float cost = sqrtf(1 - sint_2);
 
@@ -427,7 +469,6 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				} else {
 					effective_specular_weight = 0.0f;
 				}
-#endif
 
 				if (curand_uniform(&kernel_curand_state[n]) < effective_specular_weight) { // specular
 
@@ -435,12 +476,14 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 					if (material.surface.spec_power > 0.0f) { // Phong specular
 
-						vec3 ray_reflect = ray_direction.reflect(normal);
+						vec3 ray_reflect = ray_direction.reflect(effective_normal);
 						ray_direction = random_phong_hemi(material.surface.spec_power, n).change_up(ray_reflect);
+						if (ray_direction.dot(normal) < 0.0f) ray_direction = ray_direction.reflect(normal);
 
 					} else { // perfect reflection
 
-						ray_direction = ray_direction.reflect(normal);
+						ray_direction = ray_direction.reflect(effective_normal);
+						if (ray_direction.dot(normal) < 0.0f) ray_direction = ray_direction.reflect(normal);
 
 					}
 
@@ -451,25 +494,16 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 				} else if (curand_uniform(&kernel_curand_state[n]) < material.surface.transmission_weight) { // refract
 
-#ifndef ENABLE_FRESNEL
-					float n1 = exiting ? material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
-					float n2 = exiting ? kernel_scene_params.air_volume.refractive_index : material.volume.refractive_index;
-					float ni = n1 / n2;
-
-					float cosi = -ray_direction.dot(normal);
-					float sint_2 = ni * ni * (1 - cosi * cosi);
-					float cost = sqrtf(1 - sint_2);
-#endif
-
 					ray_start -= off_surface;
-					ray_direction = ray_direction * ni + normal * (ni * cosi - cost);
+					ray_direction = ray_direction * ni + effective_normal * (ni * cosi - cost);
 					ray_direction.normalize();
 					cur_volume = exiting ? kernel_scene_params.air_volume : material.volume;
 
 				} else { // diffuse
 
 					ray_start += off_surface;
-					ray_direction = random_phong_hemi(1.0f, n).change_up(normal);
+					ray_direction = random_phong_hemi(1.0f, n).change_up(effective_normal);
+					if (ray_direction.dot(normal) < 0.0f) ray_direction = ray_direction.reflect(normal);
 					cur_volume = exiting ? material.volume : kernel_scene_params.air_volume;
 
 					final_color += running_absorption * material.surface.emission;
@@ -562,6 +596,16 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
+	if (cudaMalloc(&dev_extras, scene.extras.size() * sizeof(triangle_extra_t)) != cudaSuccess) {
+		std::cout << "Cannot allocate enough GPU memory." << std::endl;
+		return false;
+	}
+
+	if (cudaMemcpy(dev_extras, scene.extras.data(), scene.triangles.size() * sizeof(triangle_extra_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+		std::cout << "Cannot upload triangle extras." << std::endl;
+		return false;
+	}
+
 	for (int i = 0; i < scene.bvhs.size(); i++) {
 
 		bvh_node_t* dev_bvh;
@@ -618,7 +662,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, dev_models, dev_instances, render_width, render_height, scene.params, (int) scene.spheres.size(), (int) scene.triangles.size(), (int) scene.models.size(), (int) scene.instances.size());
+	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, dev_extras, dev_models, dev_instances, render_width, render_height, scene.params, (int) scene.spheres.size(), (int) scene.triangles.size(), (int) scene.models.size(), (int) scene.instances.size());
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {

@@ -3,4 +3,4 @@
 #include <string>
 #include <vector>
 
-std::vector<triangle_t> loadObj(std::string filename);
+void loadObj(std::string filename, std::vector<triangle_t>& triangles, std::vector<triangle_extra_t>& extras);

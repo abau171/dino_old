@@ -6,7 +6,7 @@ struct aabb_t {
 
 	vec3 low, high;
 
-	__device__ float aabb_t::intersect(vec3 start, vec3 inv_direction);
+	__device__ float intersect(vec3 start, vec3 inv_direction);
 
 	bool overlaps(aabb_t other) {
 
@@ -39,7 +39,7 @@ struct sphere_t {
 	vec3 center;
 	float radius;
 
-	__device__ float sphere_t::intersect(vec3 start, vec3 direction);
+	__device__ float intersect(vec3 start, vec3 direction);
 
 };
 
@@ -47,7 +47,8 @@ struct triangle_t {
 
 	vec3 a, ab, ac;
 
-	__device__ float triangle_t::intersect(vec3 start, vec3 direction);
+	__device__ float intersect(vec3 start, vec3 direction);
+	__device__ void barycentric(vec3 point, float& u, float& v, float& w);
 
 	aabb_t getBound() {
 		aabb_t bound;
@@ -59,5 +60,13 @@ struct triangle_t {
 		bound.high.z = fmaxf(fmaxf(a.z, a.z + ab.z), a.z + ac.z);
 		return bound;
 	}
+
+};
+
+struct triangle_extra_t {
+
+	vec3 an, bn, cn;
+
+	__device__ vec3 interpolate_normals(float u, float v, float w);
 
 };
