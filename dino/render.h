@@ -18,3 +18,5 @@ bool render(camera_t& camera);
 void clearRender();
 
 output_color_t* downloadOutputBuffer();
+
+void getRenderStatus(int& _render_count, double& render_time);

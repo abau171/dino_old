@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <chrono>
 #include "GL/glew.h"
 #include "GL/glut.h"
 #include "cuda_runtime.h"
@@ -31,6 +32,7 @@ static const unsigned int BLOCK_DIM = 16;
 static int render_width, render_height, render_n;
 static int render_count;
 static bool should_clear = false;
+static std::chrono::time_point<std::chrono::steady_clock> start_time;
 
 static color3* dev_render_buffer;
 static float* dev_output_buffer;
@@ -537,9 +539,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 		return false;
 	}
 
-	if (!clearRenderBuffer()) {
-		return false;
-	}
+	should_clear = true;
 
 	if (cudaMalloc(&dev_spheres, scene.spheres.size() * sizeof(sphere_instance_t)) != cudaSuccess) {
 		std::cout << "Cannot allocate enough GPU memory." << std::endl;
@@ -642,6 +642,7 @@ bool render(camera_t& camera) {
 	if (should_clear) {
 		clearRenderBuffer();
 		render_count = 0;
+		start_time = std::chrono::high_resolution_clock::now();
 		should_clear = false;
 	}
 
@@ -669,8 +670,6 @@ bool render(camera_t& camera) {
 
 	cudaGLUnmapBufferObject(gl_image_buffer);
 
-	std::cout << render_count << std::endl;
-
 	return true;
 
 }
@@ -690,5 +689,15 @@ output_color_t* downloadOutputBuffer() {
 	cudaGLUnmapBufferObject(gl_image_buffer);
 
 	return output_buffer;
+
+}
+
+void getRenderStatus(int& _render_count, double& render_time) {
+
+	_render_count = render_count;
+
+	std::chrono::time_point<std::chrono::steady_clock> cur_time = std::chrono::high_resolution_clock::now();
+	long long dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(cur_time - start_time).count();
+	render_time = (double) dt_ms * 0.001;
 
 }

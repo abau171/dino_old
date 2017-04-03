@@ -10,9 +10,9 @@
 #include "scene.h"
 #include "render.h"
 
-#define TIME_KERNEL
-
-#define CAR
+#define TEAPOT
+#define OTHER_TEAPOT
+#define CORNELL_BOX
 
 static const int WIDTH = 1280;
 static const int HEIGHT = 720;
@@ -23,6 +23,7 @@ static camera_t camera;
 static scene_t scene;
 
 static std::chrono::time_point<std::chrono::steady_clock> last_time;
+
 static const float MOVEMENT_SPEED = 5.0f;
 static const float TURN_SPEED = 0.002f;
 static bool left_mouse = false;
@@ -37,8 +38,6 @@ static bool f_key = false;
 
 static bool do_clear = false;
 static bool paused = false;
-static int num_kernel_executions = 0;
-static long long sum_kernel_time = 0;
 
 void initScene() {
 
@@ -73,6 +72,7 @@ void initScene() {
 	scene.addInstance(car_model_index);
 	scene.setDiffuse({1.0f, 0.0f, 0.0f});
 	scene.setSpecularWeight(0.05f);
+	scene.setSpecularPower(10000.0f);
 	scene.scale(0.01f);
 	scene.translate({0.0f, 1.0f, 0.0f});
 	scene.rotate_y(-0.8f);
@@ -224,24 +224,59 @@ static void tick(int) {
 	if (!paused) {
 
 		cameraUpdate();
-
-		auto start_time = std::chrono::high_resolution_clock::now();
 		render(camera);
-		auto end_time = std::chrono::high_resolution_clock::now();
-
-		num_kernel_executions++;
-		long long kernel_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-		sum_kernel_time += kernel_time;
-		double avg_kernel_time = ((double) sum_kernel_time) / num_kernel_executions;
-
-#ifdef TIME_KERNEL
-		std::cout << "avg kernel execution time: " << kernel_time << "ms" << std::endl;
-#endif
-
 		glutPostRedisplay();
+
 	}
 
 	glutTimerFunc(1, tick, 0);
+
+}
+
+static void displayTextPixel(int x, int y) {
+
+	glRasterPos2f(2.0f * ((float) x / WIDTH) - 1.0f, 1.0f - 2.0f * ((float) y / HEIGHT));
+
+}
+
+static void displayTextLine(int l) {
+
+	displayTextPixel(10, 20 + l * 14);
+}
+
+static void displayText(std::string s) {
+
+	for (int i = 0; i < s.size(); i++) {
+		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, s[i]);
+	}
+
+}
+
+static void displayUIText() {
+
+	int render_count;
+	double render_time;
+	getRenderStatus(render_count, render_time);
+
+	double samples_per_second = render_count / render_time;
+
+	glPushMatrix();
+	glLoadIdentity();
+
+	displayTextLine(0);
+	displayText("samples: ");
+	displayText(std::to_string(render_count));
+
+	displayTextLine(1);
+	displayText("render time: ");
+	displayText(std::to_string((int) render_time));
+	displayText(" seconds");
+
+	displayTextLine(2);
+	displayText(std::to_string((int) samples_per_second));
+	displayText(" samples per second");
+
+	glPopMatrix();
 
 }
 
@@ -261,6 +296,8 @@ void display() {
 	glDisableClientState(GL_COLOR_ARRAY);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	displayUIText();
 
 	glutSwapBuffers();
 
