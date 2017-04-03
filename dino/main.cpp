@@ -10,9 +10,7 @@
 #include "scene.h"
 #include "render.h"
 
-#define TEAPOT
-#define OTHER_TEAPOT
-#define CORNELL_BOX
+#define VI
 
 static const int WIDTH = 1280;
 static const int HEIGHT = 720;
@@ -55,17 +53,20 @@ void initScene() {
 
 #ifdef VI
 	int vi_model_index = scene.addModel("vi.obj");
-	scene.addInstance(vi_model_index);
+	int vi_texture_index = scene.addTexture("vi.png");
+	scene.addInstance(vi_model_index, vi_texture_index);
+	scene.setInterpolateNormals(true);
 	scene.setDiffuse({1.0f, 0.2f, 0.4f});
 	scene.scale(0.03f);
-	scene.translate({0.0f, -1.0f, 0.0f});
+	scene.translate({0.0f, -0.99f, 0.0f});
 
 	scene.addSphere({0.0f, -1001.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.8f, 0.8f, 0.8f});
-	scene.setSpecularWeight(0.01f);
+	scene.setDiffuse({1.0f, 1.0f, 1.0f});
+	scene.setSpecularWeight(0.95f);
+	scene.setSpecularPower(10000.0f);
 
-	scene.addSphere({0.0f, 30.0f, 50.0f}, 5.0f);
-	scene.setEmission({1.0f, 0.8f, 0.6f}, 50.0f);
+	scene.addSphere({0.0f, 30.0f, 50.0f}, 30.0f); // 5.0f
+	scene.setEmission({1.0f, 0.8f, 0.6f}, 2.0f); // 50.0f
 #endif
 
 #ifdef CAR

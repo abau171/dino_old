@@ -28,6 +28,12 @@ void ModelBuilder::addNormal(vec3 normal) {
 
 }
 
+void ModelBuilder::addUV(uv_t uv) {
+
+	uvs.push_back(uv);
+
+}
+
 void ModelBuilder::addTriangle(int av, int bv, int cv, int an, int bn, int cn, int at, int bt, int ct) {
 
 	triangles.push_back({
@@ -37,9 +43,9 @@ void ModelBuilder::addTriangle(int av, int bv, int cv, int an, int bn, int cn, i
 		fixIndex(an, (int) normals.size()),
 		fixIndex(bn, (int) normals.size()),
 		fixIndex(cn, (int) normals.size()),
-		fixIndex(at, 1),
-		fixIndex(bt, 1),
-		fixIndex(ct, 1)});
+		fixIndex(at, (int) uvs.size()),
+		fixIndex(bt, (int) uvs.size()),
+		fixIndex(ct, (int) uvs.size())});
 
 }
 
@@ -78,6 +84,25 @@ void ModelBuilder::estimateNormals() {
 
 }
 
+void ModelBuilder::fakeUVs() {
+
+	uvs.resize(3);
+	uvs[0] = {0.0f, 0.0f};
+	uvs[1] = {1.0f, 0.0f};
+	uvs[2] = {0.0f, 1.0f};
+
+	for (int i = 0; i < triangles.size(); i++) {
+
+		builder_triangle_t& btri = triangles[i];
+
+		btri.at = 0;
+		btri.bt = 1;
+		btri.ct = 2;
+
+	}
+
+}
+
 void ModelBuilder::extractModel(std::vector<triangle_t>& final_triangles, std::vector<triangle_extra_t>& extras) {
 
 	for (int i = 0; i < triangles.size(); i++) {
@@ -86,6 +111,17 @@ void ModelBuilder::extractModel(std::vector<triangle_t>& final_triangles, std::v
 		if (btri.an == -1 || btri.bn == -1 || btri.cn == -1) {
 			std::cout << "Model does not have vertex normals, so they will be estimated." << std::endl;
 			estimateNormals();
+			break;
+		}
+
+	}
+
+	for (int i = 0; i < triangles.size(); i++) {
+
+		builder_triangle_t btri = triangles[i];
+		if (btri.at == -1 || btri.bt == -1 || btri.ct == -1) {
+			std::cout << "Model does not have vertex UVs, so they will be faked." << std::endl;
+			fakeUVs();
 			break;
 		}
 
@@ -118,6 +154,9 @@ void ModelBuilder::extractModel(std::vector<triangle_t>& final_triangles, std::v
 		extra.an = normals[btri.an];
 		extra.bn = normals[btri.bn];
 		extra.cn = normals[btri.cn];
+		extra.at = uvs[btri.at];
+		extra.bt = uvs[btri.bt];
+		extra.ct = uvs[btri.ct];
 
 		final_triangles.push_back(tri);
 		extras.push_back(extra);

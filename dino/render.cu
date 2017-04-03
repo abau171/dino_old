@@ -41,6 +41,7 @@ static triangle_t* dev_triangles;
 static triangle_extra_t* dev_extras;
 static model_t* dev_models;
 static std::vector<bvh_node_t*> dev_bvhs;
+static std::vector<color3*> dev_textures;
 static instance_t* dev_instances;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
@@ -123,6 +124,12 @@ __device__ void triangle_t::barycentric(vec3 point, float& u, float& v, float& w
 __device__ vec3 triangle_extra_t::interpolate_normals(float u, float v, float w) {
 
 	return an * u + bn * v + cn * w;
+
+}
+
+__device__ uv_t triangle_extra_t::interpolate_uvs(float u, float v, float w) {
+
+	return at * u + bt * v + ct * w;
 
 }
 
@@ -391,6 +398,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 				material_t material;
 				vec3 normal, effective_normal;
+				color3 effective_diffuse;
 				if (obj_type == SPHERE_TYPE) {
 
 					material = kernel_spheres[obj_index].material;
@@ -400,26 +408,47 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 					effective_normal = normal;
 
+					effective_diffuse = material.surface.diffuse;
+
 				} else if (obj_type == INSTANCE_TYPE) {
 
-					material = kernel_instances[obj_index].material;
+					instance_t& instance = kernel_instances[obj_index];
+					material = instance.material;
 
-					vec3 model_surface_position = kernel_instances[obj_index].inv_transform * surface_position; // surface position in model space
+					vec3 model_surface_position = instance.inv_transform * surface_position; // surface position in model space
 					float u, v, w;
 					kernel_triangles[obj_subindex].barycentric(model_surface_position, u, v, w);
 
 					normal = kernel_triangles[obj_subindex].ab.cross(kernel_triangles[obj_subindex].ac);
 					normal.normalize(); // don't need this when inverse transpose is used (see next comment)
-					normal = kernel_instances[obj_index].transform.apply_rot(normal); // really need to apply inverse transpose to scale properly
+					normal = instance.transform.apply_rot(normal); // really need to apply inverse transpose to scale properly
 					normal.normalize();
 
 					if (material.surface.interpolate_normals) {
 						effective_normal = kernel_extras[obj_subindex].interpolate_normals(u, v, w);
 						effective_normal.normalize(); // don't need this when inverse transpose is used (see next comment)
-						effective_normal = kernel_instances[obj_index].transform.apply_rot(effective_normal); // really need to apply inverse transpose to scale properly
+						effective_normal = instance.transform.apply_rot(effective_normal); // really need to apply inverse transpose to scale properly
 						effective_normal.normalize();
 					} else {
 						effective_normal = normal;
+					}
+
+					if (instance.texture != nullptr) {
+
+						uv_t uv = kernel_extras[obj_subindex].interpolate_uvs(u, v, w);
+
+						// temporary texture fetch
+						int tex_x = (int) (uv.u * instance.texture_width);
+						int tex_y = (int) (uv.v * instance.texture_height);
+						color3 tex_color = instance.texture[tex_y * instance.texture_width + tex_x];
+						// end temporary texture fetch
+
+						effective_diffuse = tex_color;
+
+					} else {
+
+						effective_diffuse = material.surface.diffuse;
+
 					}
 
 				}
@@ -507,7 +536,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 					cur_volume = exiting ? material.volume : kernel_scene_params.air_volume;
 
 					final_color += running_absorption * material.surface.emission;
-					running_absorption *= material.surface.diffuse;
+					running_absorption *= effective_diffuse;
 
 				}
 
@@ -633,6 +662,37 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 	if (cudaMemcpy(dev_models, scene.models.data(), scene.models.size() * sizeof(model_t), cudaMemcpyHostToDevice) != cudaSuccess) {
 		std::cout << "Cannot upload models." << std::endl;
 		return false;
+	}
+
+	for (int i = 0; i < scene.textures.size(); i++) {
+
+		color3* dev_texture;
+
+		if (cudaMalloc(&dev_texture, scene.textures[i].data.size() * sizeof(color3)) != cudaSuccess) {
+			std::cout << "Cannot allocate enough GPU memory." << std::endl;
+			return false;
+		}
+
+		if (cudaMemcpy(dev_texture, scene.textures[i].data.data(), scene.textures[i].data.size() * sizeof(color3), cudaMemcpyHostToDevice) != cudaSuccess) {
+			std::cout << "Cannot upload textures." << std::endl;
+			return false;
+		}
+
+		dev_textures.push_back(dev_texture);
+
+	}
+
+	for (int i = 0; i < scene.instances.size(); i++) {
+
+		int texture_index = scene.instances[i].texture_index;
+		if (texture_index >= 0) {
+			scene.instances[i].texture = dev_textures[texture_index];
+			scene.instances[i].texture_width = scene.textures[texture_index].width;
+			scene.instances[i].texture_height = scene.textures[texture_index].height;
+		} else {
+			scene.instances[i].texture = nullptr;
+		}
+
 	}
 
 	if (cudaMalloc(&dev_instances, scene.instances.size() * sizeof(instance_t)) != cudaSuccess) {

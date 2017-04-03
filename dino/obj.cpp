@@ -77,6 +77,14 @@ static void processLine(ModelBuilder& builder, std::string line) {
 
 		builder.addNormal(normal);
 
+	} else if (type_string.compare("vt") == 0) {
+
+		uv_t uv;
+		stream >> uv.u;
+		stream >> uv.v;
+
+		builder.addUV(uv);
+
 	} else if (type_string.compare("f") == 0) {
 
 		int av, bv, cv, an, bn, cn, at, bt, ct;

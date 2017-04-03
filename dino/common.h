@@ -374,3 +374,29 @@ __host__ __device__ inline mat4 mat4_rotate_z(float radians) {
 	return matrix;
 
 }
+
+struct uv_t {
+
+	float u, v;
+
+	__host__ __device__ uv_t operator+(uv_t other) {
+		return {u + other.u, v + other.v};
+	}
+
+	__host__ __device__  uv_t operator+=(uv_t other) {
+		u += other.u;
+		v += other.v;
+		return *this;
+	}
+
+	__host__ __device__ uv_t operator*(float scalar) {
+		return {scalar * u, scalar * v};
+	}
+
+	__host__ __device__ uv_t operator*=(float scalar) {
+		u *= scalar;
+		v *= scalar;
+		return *this;
+	}
+
+};

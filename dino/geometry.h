@@ -66,7 +66,9 @@ struct triangle_t {
 struct triangle_extra_t {
 
 	vec3 an, bn, cn;
+	uv_t at, bt, ct;
 
 	__device__ vec3 interpolate_normals(float u, float v, float w);
+	__device__ uv_t interpolate_uvs(float u, float v, float w);
 
 };

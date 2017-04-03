@@ -7,6 +7,7 @@
 #include "geometry.h"
 #include "obj.h"
 #include "bvh.h"
+#include "texture.h"
 
 struct camera_t {
 
@@ -91,10 +92,12 @@ struct model_t {
 };
 
 struct instance_t {
-	int model_index;
+	int model_index, texture_index;
 	mat4 transform;
 	mat4 inv_transform;
 	material_t material;
+	color3* texture;
+	int texture_width, texture_height;
 };
 
 struct scene_parameters_t {
@@ -115,6 +118,7 @@ struct scene_t {
 	std::vector<triangle_extra_t> extras;
 	std::vector<model_t> models;
 	std::vector<std::vector<bvh_node_t>> bvhs;
+	std::vector<texture_t> textures;
 	std::vector<instance_t> instances;
 
 	void addSphere(vec3 center, float radius) {
@@ -125,7 +129,8 @@ struct scene_t {
 				0.0f,
 				{0.0f, 0.0f, 0.0f},
 				{1.0f, 1.0f, 1.0f},
-				{0.0f, 0.0f, 0.0f}
+				{0.0f, 0.0f, 0.0f},
+				false
 			}, {
 				1.0f,
 				0.0f,
@@ -172,7 +177,24 @@ struct scene_t {
 
 	}
 
-	void addInstance(int model_index) {
+	int addTexture(std::string filename) {
+
+		texture_t tex;
+
+		if (loadTexture(filename, tex)) {
+
+			textures.push_back(tex);
+			return (int) textures.size() - 1;
+
+		} else {
+
+			return -1;
+
+		}
+
+	}
+
+	void addInstance(int model_index, int texture_index=-1) {
 
 		material_t material = {{
 				0.0f,
@@ -191,9 +213,11 @@ struct scene_t {
 
 		instances.push_back({
 			model_index,
+			texture_index,
 			mat4_identity(),
 			mat4_identity(),
-			material});
+			material,
+			nullptr});
 
 		last_material = &instances.back().material;
 		last_transform = &instances.back().transform;
