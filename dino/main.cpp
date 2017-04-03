@@ -10,7 +10,9 @@
 #include "scene.h"
 #include "render.h"
 
-#define CAR
+#define TEAPOT
+#define OTHER_TEAPOT
+#define CORNELL_BOX
 
 static const int WIDTH = 1280;
 static const int HEIGHT = 720;
@@ -71,7 +73,7 @@ void initScene() {
 	scene.addInstance(car_model_index);
 	scene.setDiffuse({1.0f, 0.0f, 0.0f});
 	scene.setSpecularWeight(0.05f);
-	scene.setSpecularPower(0.0f);
+	scene.setSpecularPower(10000.0f);
 	scene.setInterpolateNormals(true);
 	scene.scale(0.01f);
 	scene.translate({0.0f, 1.0f, 0.0f});
@@ -89,6 +91,7 @@ void initScene() {
 
 	scene.addInstance(teapot_model_index);
 	scene.setDiffuse({0.8f, 0.5f, 0.0f});
+	scene.setInterpolateNormals(true);
 	scene.scale(0.02f);
 	scene.rotate_y(-0.8f);
 	scene.translate({0.7f, 0.8f, 0.0f});

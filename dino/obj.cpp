@@ -6,13 +6,9 @@
 
 #include "common.h"
 #include "geometry.h"
+#include "builder.h"
 
-struct obj_load_state_t {
-	std::vector<vec3> vertices;
-	std::vector<vec3> normals;
-	std::vector<triangle_t> triangles;
-	std::vector<triangle_extra_t> extras;
-};
+#include "obj.h"
 
 static void extractDefinition(std::string definition, int& vertex_index, int& texture_index, int& normal_index) {
 
@@ -20,14 +16,43 @@ static void extractDefinition(std::string definition, int& vertex_index, int& te
 	char slash;
 
 	ss >> vertex_index;
-	ss >> slash;
-	ss >> texture_index;
-	ss >> slash;
-	ss >> normal_index;
+
+	if (ss.peek() == '/') {
+
+		ss >> slash;
+
+		if (ss.peek() == '/') {
+			texture_index = 0;
+		} else {
+			ss >> texture_index;
+		}
+
+		if (ss.peek() == '/') {
+
+			ss >> slash;
+
+			if ((int) ss.tellg() != -1) {
+				ss >> normal_index;
+			} else {
+				normal_index = 0;
+			}
+
+		} else {
+
+			normal_index = 0;
+
+		}
+
+	} else {
+
+		texture_index = 0;
+		normal_index = 0;
+
+	}
 
 }
 
-static void processLine(obj_load_state_t& load_state, std::string line) {
+static void processLine(ModelBuilder& builder, std::string line) {
 
 	std::stringstream stream(line);
 
@@ -41,7 +66,7 @@ static void processLine(obj_load_state_t& load_state, std::string line) {
 		stream >> vertex.y;
 		stream >> vertex.z;
 
-		load_state.vertices.push_back(vertex);
+		builder.addVertex(vertex);
 
 	} else if (type_string.compare("vn") == 0) {
 
@@ -50,61 +75,33 @@ static void processLine(obj_load_state_t& load_state, std::string line) {
 		stream >> normal.y;
 		stream >> normal.z;
 
-		load_state.normals.push_back(normal);
+		builder.addNormal(normal);
 
 	} else if (type_string.compare("f") == 0) {
 
-		int vertex_index, texture_index, normal_index;
+		int av, bv, cv, an, bn, cn, at, bt, ct;
 		std::string definition;
 
 		stream >> definition;
-		extractDefinition(definition, vertex_index, texture_index, normal_index);
-		vec3 a = load_state.vertices[vertex_index - 1];
-		vec3 an = load_state.normals[normal_index - 1];
+		extractDefinition(definition, av, at, an);
 
 		stream >> definition;
-		extractDefinition(definition, vertex_index, texture_index, normal_index);
-		vec3 b = load_state.vertices[vertex_index - 1];
-		vec3 bn = load_state.normals[normal_index - 1];
+		extractDefinition(definition, bv, bt, bn);
 
 		stream >> definition;
-		extractDefinition(definition, vertex_index, texture_index, normal_index);
-		vec3 c = load_state.vertices[vertex_index - 1];
-		vec3 cn = load_state.normals[normal_index - 1];
+		extractDefinition(definition, cv, ct, cn);
 
-		triangle_t triangle;
-		triangle.a = a;
-		triangle.ab = b - a;
-		triangle.ac = c - a;
-
-		triangle_extra_t extra;
-		extra.an = an;
-		extra.bn = bn;
-		extra.cn = cn;
-
-		load_state.triangles.push_back(triangle);
-		load_state.extras.push_back(extra);
+		builder.addTriangle(av, bv, cv, an, bn, cn, at, bt, ct);
 
 		int remaining = (int) stream.tellg();
 		if (remaining != -1) {
 
+			int dv, dn, dt;
+
 			stream >> definition;
-			extractDefinition(definition, vertex_index, texture_index, normal_index);
-			vec3 d = load_state.vertices[vertex_index - 1];
-			vec3 dn = load_state.normals[normal_index - 1];
+			extractDefinition(definition, dv, dt, dn);
 
-			triangle_t triangle;
-			triangle.a = c;
-			triangle.ab = d - c;
-			triangle.ac = a - c;
-
-			triangle_extra_t extra;
-			extra.an = cn;
-			extra.bn = dn;
-			extra.cn = an;
-
-			load_state.triangles.push_back(triangle);
-			load_state.extras.push_back(extra);
+			builder.addTriangle(cv, dv, av, cn, dn, an, ct, dt, at);
 
 		}
 
@@ -114,22 +111,19 @@ static void processLine(obj_load_state_t& load_state, std::string line) {
 
 void loadObj(std::string filename, std::vector<triangle_t>& triangles, std::vector<triangle_extra_t>& extras) {
 
-	obj_load_state_t load_state;
+	std::cout << "Loading OBJ file: " << filename << std::endl;
+
+	ModelBuilder builder;
 
 	std::ifstream file(filename);
 	if (file.is_open()) {
 		std::string line;
 		while (getline(file, line)) {
-			processLine(load_state, line);
+			processLine(builder, line);
 		}
 		file.close();
 	}
 
-	for (int i = 0; i < load_state.vertices.size(); i++) {
-		vec3 vertex = load_state.vertices[i];
-	}
-
-	triangles = load_state.triangles;
-	extras = load_state.extras;
+	builder.extractModel(triangles, extras);
 
 }
