@@ -57,7 +57,7 @@ static void processLine(obj_load_state_t& load_state, std::string line) {
 
 		load_state.triangles.push_back(triangle);
 
-		int remaining = stream.tellg();
+		int remaining = (int) stream.tellg();
 		if (remaining != -1) {
 
 			stream >> definition;

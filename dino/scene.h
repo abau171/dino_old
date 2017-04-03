@@ -92,7 +92,7 @@ struct scene_t {
 
 	int addModel(std::string filename) {
 
-		int tri_start = triangles.size();
+		int tri_start = (int) triangles.size();
 
 		std::vector<triangle_t> model_triangles = loadObj(filename);
 
@@ -104,7 +104,7 @@ struct scene_t {
 			bounds.push_back(bound);
 		}
 
-		int bvh_index = bvhs.size();
+		int bvh_index = (int) bvhs.size();
 		bvhs.push_back(std::vector<bvh_node_t>());
 		std::vector<int> indices;
 		buildBVH(bounds, bvhs[bvh_index], indices);
@@ -114,7 +114,7 @@ struct scene_t {
 		}
 
 		models.push_back({tri_start, tri_start + (int) indices.size()});
-		return models.size() - 1;
+		return (int) models.size() - 1;
 
 	}
 

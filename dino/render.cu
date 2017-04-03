@@ -617,7 +617,7 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	dim3 blocks((render_width + BLOCK_DIM - 1) / BLOCK_DIM, (render_height + BLOCK_DIM - 1) / BLOCK_DIM);
 	dim3 threads_per_block(BLOCK_DIM, BLOCK_DIM);
-	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, dev_models, dev_instances, render_width, render_height, scene.params, scene.spheres.size(), scene.triangles.size(), scene.models.size(), scene.instances.size());
+	initRenderKernel<<<blocks, threads_per_block>>>(dev_output_buffer, dev_render_buffer, dev_curand_state, dev_spheres, dev_triangles, dev_models, dev_instances, render_width, render_height, scene.params, (int) scene.spheres.size(), (int) scene.triangles.size(), (int) scene.models.size(), (int) scene.instances.size());
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {

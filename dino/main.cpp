@@ -150,7 +150,8 @@ void saveImage(bool promptForName) {
 	}
 
 	time_t t = time(0);
-	struct tm now = *localtime(&t);
+	struct tm now;
+	localtime_s(&now, &t);
 	std::string filename =
 		std::to_string(now.tm_year + 1900) + "-" +
 		std::to_string(now.tm_mon) + "-" +

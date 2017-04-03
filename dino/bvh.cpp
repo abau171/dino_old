@@ -185,28 +185,28 @@ static bvh_construction_node_t* buildBVHRecursive(std::vector<indexed_aabb_t>& b
 static void unpackDFS(std::vector<bvh_node_t>& bvh, std::vector<int>& indices, bvh_construction_node_t* cnode) {
 
 	bvh_node_t node;
-	int node_index = bvh.size();
+	int node_index = (int) bvh.size();
 	bvh.push_back(node); // reserve a spot
 
 	node.bound = cnode->bound;
 
 	if (cnode->is_leaf) {
 
-		node.i0 = indices.size();
+		node.i0 = (int) indices.size();
 
 		for (int i = 0; i < cnode->bounds.size(); i++) {
 			indexed_aabb_t bound = cnode->bounds[i];
 			indices.push_back(bound.index);
 		}
 
-		node.i1 = BVH_LEAF_MASK | indices.size();
+		node.i1 = BVH_LEAF_MASK | (int) indices.size();
 
 	} else {
 
-		node.i0 = bvh.size();
+		node.i0 = (int) bvh.size();
 		unpackDFS(bvh, indices, cnode->left_child);
 
-		node.i1 = bvh.size();
+		node.i1 = (int) bvh.size();
 		unpackDFS(bvh, indices, cnode->right_child);
 
 	}
