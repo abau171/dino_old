@@ -1,5 +1,6 @@
 #include <iostream>
 #include <ctime>
+#include <chrono>
 #include "GL/glew.h"
 #include "GL/glut.h"
 #include "lodepng.h"
@@ -8,6 +9,8 @@
 #include "geometry.h"
 #include "scene.h"
 #include "render.h"
+
+#define TIME_KERNEL
 
 #define TEAPOT
 #define CORNELL_BOX
@@ -20,7 +23,9 @@ GLuint gl_image_buffer;
 static camera_t camera;
 static scene_t scene;
 
-bool paused = false;
+static bool paused = false;
+static int num_kernel_executions = 0;
+static long long sum_kernel_time = 0;
 
 void initScene() {
 
@@ -176,7 +181,20 @@ void saveImage(bool promptForName) {
 void tick(int) {
 
 	if (!paused) {
+
+		auto start_time = std::chrono::high_resolution_clock::now();
 		render(camera);
+		auto end_time = std::chrono::high_resolution_clock::now();
+
+		num_kernel_executions++;
+		long long kernel_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+		sum_kernel_time += kernel_time;
+		double avg_kernel_time = ((double) sum_kernel_time) / num_kernel_executions;
+
+#ifdef TIME_KERNEL
+		std::cout << "avg kernel execution time: " << kernel_time << "ms" << std::endl;
+#endif
+
 		glutPostRedisplay();
 	}
 
