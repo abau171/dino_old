@@ -12,40 +12,39 @@
 
 #define TIME_KERNEL
 
-#define TEAPOT
-#define CORNELL_BOX
+#define CAR
 
-static const int WIDTH = 640;
-static const int HEIGHT = 480;
+static const int WIDTH = 1280;
+static const int HEIGHT = 720;
 
-GLuint gl_image_buffer;
+static GLuint gl_image_buffer;
 
 static camera_t camera;
 static scene_t scene;
 
+static std::chrono::time_point<std::chrono::steady_clock> last_time;
+static const float MOVEMENT_SPEED = 5.0f;
+static const float TURN_SPEED = 0.002f;
+static bool left_mouse = false;
+static bool right_mouse = false;
+static int mouse_x, mouse_y;
+static bool w_key = false;
+static bool a_key = false;
+static bool s_key = false;
+static bool d_key = false;
+static bool r_key = false;
+static bool f_key = false;
+
+static bool do_clear = false;
 static bool paused = false;
 static int num_kernel_executions = 0;
 static long long sum_kernel_time = 0;
 
 void initScene() {
 
-	vec3 position = {0.0f, 4.0f, 7.0f};
-
-	vec3 lookat = {0.0f, 2.11f, 0.0f};
-	vec3 forward = (lookat - position);
-	forward.normalize();
-	vec3 up = {0.0f, 1.0f, 0.0f};
-	vec3 right = forward.cross(up);
-	right.normalize();
-	up = right.cross(forward);
-
-	camera = {
-		position,
-		forward,
-		up,
-		right,
-		(float) WIDTH / HEIGHT
-	};
+	camera.position = {0.0f, 4.0f, 7.0f};
+	camera.aspect_ratio = (float) WIDTH / HEIGHT;
+	camera.set_rotation(0.0f, -0.25f);
 
 	scene.params.background_emission = {0.4f, 0.6f, 0.9f};
 	scene.params.background_emission = scene.params.background_emission.gammaToLinear();
@@ -60,13 +59,13 @@ void initScene() {
 	scene.setDiffuse({1.0f, 0.2f, 0.4f});
 	scene.scale(0.03f);
 	scene.translate({0.0f, -1.0f, 0.0f});
-	scene.rotate_y(-0.3f);
 
 	scene.addSphere({0.0f, -1001.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.2f, 0.2f, 0.2f});
+	scene.setDiffuse({0.8f, 0.8f, 0.8f});
+	scene.setSpecularWeight(0.01f);
 
-	scene.addSphere({0.0f, 90.0f, 0.0f}, 80.0f);
-	scene.setEmission({1.0f, 0.9f, 0.8f}, 2.0f);
+	scene.addSphere({0.0f, 30.0f, 50.0f}, 5.0f);
+	scene.setEmission({1.0f, 0.8f, 0.6f}, 50.0f);
 #endif
 
 #ifdef CAR
@@ -79,10 +78,10 @@ void initScene() {
 	scene.rotate_y(-0.8f);
 
 	scene.addSphere({0.0f, -999.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.2f, 0.6f, 0.1f});
+	scene.setDiffuse({0.2f, 0.4f, 0.1f});
 
-	scene.addSphere({-50.0f, 80.0f, 0.0f}, 80.0f);
-	scene.setEmission({1.0f, 0.9f, 0.8f}, 2.0f);
+	scene.addSphere({-50.0f, 80.0f, 0.0f}, 20.0f);
+	scene.setEmission({1.0f, 0.9f, 0.8f}, 32.0f);
 #endif
 
 #ifdef TEAPOT
@@ -179,9 +178,52 @@ void saveImage(bool promptForName) {
 
 }
 
-void tick(int) {
+static void cameraUpdate() {
+
+	auto cur_time = std::chrono::high_resolution_clock::now();
+	long long dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(cur_time - last_time).count();
+	last_time = cur_time;
+
+	float dt = dt_ms * 0.001f;
+	float speed = dt * MOVEMENT_SPEED;
+
+	if (w_key) {
+		camera.position += camera.forward * speed;
+		do_clear = true;
+	}
+	if (a_key) {
+		camera.position -= camera.right * speed;
+		do_clear = true;
+	}
+	if (s_key) {
+		camera.position -= camera.forward * speed;
+		do_clear = true;
+	}
+	if (d_key) {
+		camera.position += camera.right * speed;
+		do_clear = true;
+	}
+	if (r_key) {
+		camera.position.y += speed;
+		do_clear = true;
+	}
+	if (f_key) {
+		camera.position.y -= speed;
+		do_clear = true;
+	}
+
+	if (do_clear) {
+		clearRender();
+		do_clear = false;
+	}
+
+}
+
+static void tick(int) {
 
 	if (!paused) {
+
+		cameraUpdate();
 
 		auto start_time = std::chrono::high_resolution_clock::now();
 		render(camera);
@@ -240,25 +282,87 @@ void keyboard(unsigned char key, int x, int y) {
 	case 'O':
 		saveImage(false);
 		break;
-	case 'r':
+	case 'c':
 		clearRender();
 		break;
 	case 'w':
-		camera.position += camera.forward;
-		clearRender();
+		w_key = true;
 		break;
 	case 'a':
-		camera.position -= camera.right;
-		clearRender();
+		a_key = true;
 		break;
 	case 's':
-		camera.position -= camera.forward;
-		clearRender();
+		s_key = true;
 		break;
 	case 'd':
-		camera.position += camera.right;
-		clearRender();
+		d_key = true;
 		break;
+	case 'r':
+		r_key = true;
+		break;
+	case 'f':
+		f_key = true;
+		break;
+	}
+
+}
+
+void keyboardUp(unsigned char key, int x, int y) {
+
+	switch (key) {
+	case 'w':
+		w_key = false;
+		break;
+	case 'a':
+		a_key = false;
+		break;
+	case 's':
+		s_key = false;
+		break;
+	case 'd':
+		d_key = false;
+		break;
+	case 'r':
+		r_key = false;
+		break;
+	case 'f':
+		f_key = false;
+		break;
+	}
+
+}
+
+void mouse(int button, int state, int x, int y) {
+
+	if (button == GLUT_LEFT_BUTTON) {
+		if (state == GLUT_DOWN) {
+			left_mouse = true;
+			mouse_x = x;
+			mouse_y = y;
+			glutSetCursor(GLUT_CURSOR_NONE);
+		} else {
+			left_mouse = true;
+			glutSetCursor(GLUT_CURSOR_INHERIT);
+		}
+	} else if (button == GLUT_RIGHT_BUTTON) {
+		right_mouse = (state == GLUT_DOWN);
+	}
+
+}
+
+void motion(int x, int y) {
+
+	if (left_mouse && x != mouse_x && y != mouse_y) {
+
+		int dx = x - mouse_x;
+		int dy = y - mouse_y;
+
+		camera.rotate(-TURN_SPEED * dx, -TURN_SPEED * dy);
+
+		glutWarpPointer(mouse_x, mouse_y);
+
+		do_clear = true;
+
 	}
 
 }
@@ -284,8 +388,15 @@ int main(int argc, char** argv) {
 
 	if (!initRender(WIDTH, HEIGHT, scene, gl_image_buffer)) return 1;
 
+	last_time = std::chrono::high_resolution_clock::now();
+
+	glutIgnoreKeyRepeat(1);
+
 	glutDisplayFunc(display);
 	glutKeyboardFunc(keyboard);
+	glutKeyboardUpFunc(keyboardUp);
+	glutMouseFunc(mouse);
+	glutMotionFunc(motion);
 
 	tick(0);
 

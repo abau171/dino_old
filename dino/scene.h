@@ -9,8 +9,32 @@
 #include "bvh.h"
 
 struct camera_t {
+
+	float phi, theta;
 	vec3 position, forward, up, right;
 	float aspect_ratio;
+
+	void set_rotation(float new_phi, float new_theta) {
+
+		phi = new_phi;
+		theta = new_theta;
+
+		forward = {0.0f, 0.0f, -1.0f};
+		forward = mat4_rotate_y(phi) * (mat4_rotate_x(theta) * forward);
+		forward.normalize();
+		up = {0.0f, 1.0f, 0.0f};
+		right = forward.cross(up);
+		right.normalize();
+		up = right.cross(forward);
+
+	}
+
+	void rotate(float d_phi, float d_theta) {
+
+		set_rotation(phi + d_phi, theta + d_theta);
+
+	}
+
 };
 
 struct surface_t {
