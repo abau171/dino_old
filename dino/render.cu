@@ -551,7 +551,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 		final_color += kernel_render_buffer[n];
 		kernel_render_buffer[n] = final_color;
 
-		color3 output_color = (final_color / (render_count + 1)).linearToGamma() * 255.0f;
+		color3 output_color = (final_color / render_count).linearToGamma() * 255.0f;
 		output_color = {
 			fminf(255.0f, output_color.r),
 			fminf(255.0f, output_color.g),
