@@ -40,6 +40,7 @@ static bool h_key = false;
 
 static bool do_clear = false;
 static bool paused = false;
+static bool locked = false;
 
 void initScene() {
 
@@ -70,6 +71,9 @@ void initScene() {
 #endif
 
 #ifdef SKULL
+	camera.init({-5.6f, 4.2f, 4.4f}, (float) WIDTH / HEIGHT);
+	camera.set_rotation(-1.0f, -0.3f);
+
 	int skull_model_index = scene.addModel("skull.obj");
 	scene.addInstance(skull_model_index);
 	scene.setInterpolateNormals(true);
@@ -208,50 +212,54 @@ static void cameraUpdate() {
 	float dt = dt_ms * 0.001f;
 	float speed = dt * MOVEMENT_SPEED;
 
-	if (w_key) {
-		camera.position += camera.forward * speed;
-		do_clear = true;
-	}
-	if (a_key) {
-		camera.position -= camera.right * speed;
-		do_clear = true;
-	}
-	if (s_key) {
-		camera.position -= camera.forward * speed;
-		do_clear = true;
-	}
-	if (d_key) {
-		camera.position += camera.right * speed;
-		do_clear = true;
-	}
-	if (r_key) {
-		camera.position.y += speed;
-		do_clear = true;
-	}
-	if (f_key) {
-		camera.position.y -= speed;
-		do_clear = true;
-	}
-	if (t_key) {
-		camera.updateFocalDistance(speed);
-		do_clear = true;
-	}
-	if (g_key) {
-		camera.updateFocalDistance(-speed);
-		do_clear = true;
-	}
-	if (y_key) {
-		camera.updateApertureRadius(0.1f * speed);
-		do_clear = true;
-	}
-	if (h_key) {
-		camera.updateApertureRadius(-0.1f * speed);
-		do_clear = true;
-	}
+	if (!locked) {
 
-	if (do_clear) {
-		clearRender();
-		do_clear = false;
+		if (w_key) {
+			camera.position += camera.forward * speed;
+			do_clear = true;
+		}
+		if (a_key) {
+			camera.position -= camera.right * speed;
+			do_clear = true;
+		}
+		if (s_key) {
+			camera.position -= camera.forward * speed;
+			do_clear = true;
+		}
+		if (d_key) {
+			camera.position += camera.right * speed;
+			do_clear = true;
+		}
+		if (r_key) {
+			camera.position.y += speed;
+			do_clear = true;
+		}
+		if (f_key) {
+			camera.position.y -= speed;
+			do_clear = true;
+		}
+		if (t_key) {
+			camera.updateFocalDistance(speed);
+			do_clear = true;
+		}
+		if (g_key) {
+			camera.updateFocalDistance(-speed);
+			do_clear = true;
+		}
+		if (y_key) {
+			camera.updateApertureRadius(0.1f * speed);
+			do_clear = true;
+		}
+		if (h_key) {
+			camera.updateApertureRadius(-0.1f * speed);
+			do_clear = true;
+		}
+
+		if (do_clear) {
+			clearRender();
+			do_clear = false;
+		}
+
 	}
 
 }
@@ -313,6 +321,23 @@ static void displayUIText() {
 	displayText(std::to_string((int) samples_per_second));
 	displayText(" samples per second");
 
+	displayTextLine(3);
+	displayText("camera position: ");
+	displayText(std::to_string(camera.position.x));
+	displayText(", ");
+	displayText(std::to_string(camera.position.y));
+	displayText(", ");
+	displayText(std::to_string(camera.position.z));
+
+	displayTextLine(4);
+	displayText("camera rotation: ");
+	displayText(std::to_string(camera.phi));
+	displayText(", ");
+	displayText(std::to_string(camera.theta));
+
+	displayTextLine(5);
+	if (locked) displayText("CAMERA LOCKED");
+
 	glPopMatrix();
 
 }
@@ -358,6 +383,9 @@ void keyboard(unsigned char key, int x, int y) {
 		break;
 	case 'c':
 		clearRender();
+		break;
+	case 'l':
+		locked = !locked;
 		break;
 	case 'w':
 		w_key = true;
@@ -452,14 +480,18 @@ void motion(int x, int y) {
 
 	if (left_mouse && x != mouse_x && y != mouse_y) {
 
-		int dx = x - mouse_x;
-		int dy = y - mouse_y;
+		if (!locked) {
 
-		camera.rotate(-TURN_SPEED * dx, -TURN_SPEED * dy);
+			int dx = x - mouse_x;
+			int dy = y - mouse_y;
+
+			camera.rotate(-TURN_SPEED * dx, -TURN_SPEED * dy);
+
+			do_clear = true;
+
+		}
 
 		glutWarpPointer(mouse_x, mouse_y);
-
-		do_clear = true;
 
 	}
 
