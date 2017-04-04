@@ -10,7 +10,7 @@
 #include "scene.h"
 #include "render.h"
 
-#define VI
+#define SKULL
 
 static const int WIDTH = 1280;
 static const int HEIGHT = 720;
@@ -64,6 +64,23 @@ void initScene() {
 	scene.setDiffuse({1.0f, 1.0f, 1.0f});
 	scene.setSpecularWeight(0.95f);
 	scene.setSpecularPower(10000.0f);
+
+	scene.addSphere({0.0f, 30.0f, 50.0f}, 30.0f); // 5.0f
+	scene.setEmission({1.0f, 0.8f, 0.6f}, 2.0f); // 50.0f
+#endif
+
+#ifdef SKULL
+	int skull_model_index = scene.addModel("skull.obj");
+	scene.addInstance(skull_model_index);
+	scene.setInterpolateNormals(true);
+	scene.setDiffuse({1.0f, 1.0f, 1.0f});
+	//scene.setTransmissionWeight(1.0f); // uncomment for SSS
+	scene.setScatter(20.0f);
+	scene.scale(3.0f);
+	scene.translate({0.0f, 2.1f, 0.0f});
+
+	scene.addSphere({0.0f, -1001.0f, 0.0f}, 1000.0f);
+	scene.setDiffuse({0.3f, 0.3f, 0.3f});
 
 	scene.addSphere({0.0f, 30.0f, 50.0f}, 30.0f); // 5.0f
 	scene.setEmission({1.0f, 0.8f, 0.6f}, 2.0f); // 50.0f
