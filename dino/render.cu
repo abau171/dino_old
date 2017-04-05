@@ -198,9 +198,9 @@ __device__ vec3 random_hemi(int n) {
 
 }
 
-__device__ vec3 random_phong_hemi(float spec_power, int n) {
+__device__ vec3 random_phong_hemi(float specular_power, int n) {
 
-	float cos_theta = __powf(curand_uniform(&kernel_curand_state[n]), 1.0f / (spec_power + 1.0f));
+	float cos_theta = __powf(curand_uniform(&kernel_curand_state[n]), 1.0f / (specular_power + 1.0f));
 	return random_isotropic(cos_theta, n);
 
 }
@@ -502,10 +502,10 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 					ray_start += off_surface;
 
-					if (material.surface.spec_power > 0.0f) { // Phong specular
+					if (material.surface.specular_power > 0.0f) { // Phong specular
 
 						vec3 ray_reflect = ray_direction.reflect(effective_normal);
-						ray_direction = random_phong_hemi(material.surface.spec_power, n).change_up(ray_reflect);
+						ray_direction = random_phong_hemi(material.surface.specular_power, n).change_up(ray_reflect);
 						if (ray_direction.dot(normal) < 0.0f) ray_direction = ray_direction.reflect(normal);
 
 					} else { // perfect reflection
@@ -523,8 +523,23 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				} else if (curand_uniform(&kernel_curand_state[n]) < material.surface.transmission_weight) { // refract
 
 					ray_start -= off_surface;
-					ray_direction = ray_direction * ni + effective_normal * (ni * cosi - cost);
-					ray_direction.normalize();
+
+
+					if (material.surface.transmission_power > 0.0f) { // Cook translucency with Phong specular PDF
+
+						vec3 ray_transmit = ray_direction * ni + effective_normal * (ni * cosi - cost);
+						ray_transmit.normalize();
+						ray_direction = random_phong_hemi(material.surface.transmission_power, n).change_up(ray_transmit);
+						if (ray_direction.dot(normal) > 0.0f) ray_direction = ray_direction.reflect(normal);
+
+					} else { // perfect reflection
+
+						ray_direction = ray_direction * ni + effective_normal * (ni * cosi - cost);
+						ray_direction.normalize();
+						if (ray_direction.dot(normal) > 0.0f) ray_direction = ray_direction.reflect(normal);
+
+					}
+
 					cur_volume = exiting ? kernel_scene_params.air_volume : material.volume;
 
 				} else { // diffuse

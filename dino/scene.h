@@ -66,7 +66,8 @@ struct camera_t {
 
 struct surface_t {
 	float specular_weight, transmission_weight; // first checks for specular reflection, if not then checks for transmission vs diffuse
-	float spec_power; // spec_power=0 means perfect reflection
+	float specular_power; // specular_power=0 means perfect reflection
+	float transmission_power; // transmission_power=0 means perfect transmission
 	color3 diffuse, specular, emission;
 	bool interpolate_normals;
 };
@@ -148,6 +149,7 @@ struct scene_t {
 				0.0f,
 				0.0f,
 				0.0f,
+				0.0f,
 				{0.0f, 0.0f, 0.0f},
 				{1.0f, 1.0f, 1.0f},
 				{0.0f, 0.0f, 0.0f},
@@ -221,6 +223,7 @@ struct scene_t {
 				0.0f,
 				0.0f,
 				0.0f,
+				0.0f,
 				{0.0f, 0.0f, 0.0f},
 				{1.0f, 1.0f, 1.0f},
 				{0.0f, 0.0f, 0.0f},
@@ -254,8 +257,12 @@ struct scene_t {
 		last_material->surface.transmission_weight = transmission_weight;
 	}
 
-	void setSpecularPower(float spec_power) {
-		last_material->surface.spec_power = spec_power;
+	void setSpecularPower(float specular_power) {
+		last_material->surface.specular_power = specular_power;
+	}
+
+	void setTransmissionPower(float transmission_power) {
+		last_material->surface.transmission_power = transmission_power;
 	}
 
 	void setRefractiveIndex(float refractive_index) {
