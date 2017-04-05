@@ -23,6 +23,7 @@
     <ClCompile Include="bvh.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="obj.cpp" />
+    <ClCompile Include="scenes.cpp" />
     <ClCompile Include="texture.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -33,6 +34,7 @@
     <ClInclude Include="obj.h" />
     <ClInclude Include="render.h" />
     <ClInclude Include="scene.h" />
+    <ClInclude Include="scenes.h" />
     <ClInclude Include="texture.h" />
   </ItemGroup>
   <ItemGroup>

@@ -9,8 +9,7 @@
 #include "geometry.h"
 #include "scene.h"
 #include "render.h"
-
-#define SKULL
+#include "scenes.h"
 
 static const int WIDTH = 1280;
 static const int HEIGHT = 720;
@@ -41,114 +40,6 @@ static bool h_key = false;
 static bool do_clear = false;
 static bool paused = false;
 static bool locked = false;
-
-void initScene() {
-
-	camera.init({0.0f, 4.0f, 7.0f}, (float) WIDTH / HEIGHT);
-	camera.set_rotation(0.0f, -0.25f);
-
-	scene.params.background_emission = {0.4f, 0.6f, 0.9f};
-	scene.params.background_emission = scene.params.background_emission.gammaToLinear();
-	scene.params.air_volume = {1.0f, 0.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
-	scene.params.air_volume.attenuation = scene.params.air_volume.attenuation.gammaToLinear();
-
-#ifdef VI
-	int vi_model_index = scene.addModel("vi.obj");
-	int vi_texture_index = scene.addTexture("vi.png");
-	scene.addInstance(vi_model_index, vi_texture_index);
-	scene.setInterpolateNormals(true);
-	scene.setDiffuse({1.0f, 0.2f, 0.4f});
-	scene.scale(0.03f);
-	scene.translate({0.0f, -0.99f, 0.0f});
-
-	scene.addSphere({0.0f, -1001.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({1.0f, 1.0f, 1.0f});
-	scene.setSpecularWeight(0.95f);
-	scene.setSpecularPower(10000.0f);
-
-	scene.addSphere({0.0f, 30.0f, 50.0f}, 30.0f); // 5.0f
-	scene.setEmission({1.0f, 0.8f, 0.6f}, 2.0f); // 50.0f
-#endif
-
-#ifdef SKULL
-	camera.init({-5.6f, 4.2f, 4.4f}, (float) WIDTH / HEIGHT);
-	camera.set_rotation(-1.0f, -0.3f);
-
-	int skull_model_index = scene.addModel("skull.obj");
-	scene.addInstance(skull_model_index);
-	scene.setInterpolateNormals(true);
-	scene.setDiffuse({1.0f, 1.0f, 1.0f});
-	//scene.setTransmissionWeight(1.0f); // uncomment for SSS
-	scene.setScatter(20.0f);
-	scene.scale(3.0f);
-	scene.translate({0.0f, 2.1f, 0.0f});
-
-	scene.addSphere({0.0f, -1001.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.3f, 0.3f, 0.3f});
-
-	scene.addSphere({0.0f, 30.0f, 50.0f}, 30.0f); // 5.0f
-	scene.setEmission({1.0f, 0.8f, 0.6f}, 2.0f); // 50.0f
-#endif
-
-#ifdef CAR
-	int car_model_index = scene.addModel("car.obj");
-	scene.addInstance(car_model_index);
-	scene.setDiffuse({1.0f, 0.0f, 0.0f});
-	scene.setSpecularWeight(0.05f);
-	scene.setSpecularPower(10000.0f);
-	scene.setInterpolateNormals(true);
-	scene.scale(0.01f);
-	scene.translate({0.0f, 1.0f, 0.0f});
-	scene.rotate_y(-0.8f);
-
-	scene.addSphere({0.0f, -999.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.2f, 0.4f, 0.1f});
-
-	scene.addSphere({-50.0f, 80.0f, 0.0f}, 20.0f);
-	scene.setEmission({1.0f, 0.9f, 0.8f}, 32.0f);
-#endif
-
-#ifdef TEAPOT
-	int teapot_model_index = scene.addModel("teapot.obj");
-
-	scene.addInstance(teapot_model_index);
-	scene.setDiffuse({0.8f, 0.5f, 0.0f});
-	scene.setInterpolateNormals(true);
-	scene.scale(0.02f);
-	scene.rotate_y(-0.8f);
-	scene.translate({0.7f, 0.8f, 0.0f});
-
-	scene.addSphere({0.0f, 4.0f, 0.0f}, 1.0f);
-	scene.setEmission({1.0f, 1.0f, 1.0f}, 10.0f);
-
-#ifdef OTHER_TEAPOT
-	scene.addInstance(teapot_model_index);
-	scene.setDiffuse({0.8f, 0.0f, 0.5f});
-	scene.scale(0.01f);
-	scene.rotate_y(3.9416f);
-	scene.translate({-1.2f, 0.8f, 0.0f});
-#endif
-
-#endif
-
-#ifdef CORNELL_BOX
-	scene.addSphere({0.0f, -1000.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.5f, 0.5f, 0.5f});
-
-	scene.addSphere({-1003.0f, 0.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({1.0f, 0.0f, 0.0f});
-
-	scene.addSphere({1003.0f, 0.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.0f, 1.0f, 0.0f});
-
-	scene.addSphere({0.0f, 0.0f, 997.0f}, 1000.0f);
-	scene.setDiffuse({0.5f, 0.5f, 0.5f});
-
-	scene.addSphere({0.0f, 1006.0f, 0.0f}, 1000.0f);
-	scene.setDiffuse({0.5f, 0.5f, 0.5f});
-#endif
-
-}
 
 void saveImage(bool promptForName) {
 
@@ -499,7 +390,8 @@ void motion(int x, int y) {
 
 int main(int argc, char** argv) {
 
-	initScene();
+	scene.init();
+	buildScene(scene, camera, WIDTH, HEIGHT);
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);

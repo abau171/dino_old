@@ -18,8 +18,6 @@
 
 #include "render.h"
 
-#define MAX_DEPTH 4
-
 #define SPHERE_TYPE 0
 #define INSTANCE_TYPE 1
 
@@ -339,7 +337,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 		volume_t cur_volume = kernel_scene_params.air_volume;
 
-		for (int depth = 0; depth < MAX_DEPTH; depth++) {
+		for (int depth = 0; depth < kernel_scene_params.max_depth; depth++) {
 
 			float t = INFINITY;
 			int obj_index = -1;

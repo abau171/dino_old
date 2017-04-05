@@ -101,6 +101,7 @@ struct instance_t {
 };
 
 struct scene_parameters_t {
+	int max_depth;
 	volume_t air_volume;
 	color3 background_emission;
 };
@@ -120,6 +121,26 @@ struct scene_t {
 	std::vector<std::vector<bvh_node_t>> bvhs;
 	std::vector<texture_t> textures;
 	std::vector<instance_t> instances;
+
+	void init() {
+
+		params.max_depth = 2;
+		params.background_emission = {0.0f, 0.0f, 0.0f};
+		params.air_volume = {1.0f, 0.0f, 0.0f, {1.0f, 1.0f, 1.0f}};
+
+	}
+
+	void setMaxDepth(int max_depth) {
+
+		params.max_depth = max_depth;
+
+	}
+
+	void setBackgroundEmission(color3 emission) {
+
+		params.background_emission = emission.gammaToLinear();
+
+	}
 
 	void addSphere(vec3 center, float radius) {
 
