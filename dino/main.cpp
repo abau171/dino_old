@@ -24,7 +24,6 @@ static std::chrono::time_point<std::chrono::steady_clock> last_time;
 static const float MOVEMENT_SPEED = 5.0f;
 static const float TURN_SPEED = 0.002f;
 static bool left_mouse = false;
-static bool right_mouse = false;
 static int mouse_x, mouse_y;
 static bool w_key = false;
 static bool a_key = false;
@@ -358,11 +357,14 @@ void mouse(int button, int state, int x, int y) {
 			mouse_y = y;
 			glutSetCursor(GLUT_CURSOR_NONE);
 		} else {
-			left_mouse = true;
+			left_mouse = false;
 			glutSetCursor(GLUT_CURSOR_INHERIT);
 		}
 	} else if (button == GLUT_RIGHT_BUTTON) {
-		right_mouse = (state == GLUT_DOWN);
+		if (!locked && state == GLUT_DOWN) {
+			camera.focal_distance = getImageDepth(camera, x, HEIGHT - y - 1);
+			clearRender();
+		}
 	}
 
 }

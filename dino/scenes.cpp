@@ -70,7 +70,7 @@ static void buildCarScene(scene_t& scene, camera_t& camera, int width, int heigh
 	scene.setSpecularPower(10000.0f);
 	scene.setInterpolateNormals(true);
 	scene.scale(0.01f);
-	scene.translate({0.0f, 1.0f, 0.0f});
+	scene.translate({0.0f, 0.975f, 0.0f});
 	scene.rotate_y(-0.8f);
 
 	scene.addSphere({0.0f, -999.0f, 0.0f}, 1000.0f);
@@ -188,8 +188,8 @@ void buildScene(scene_t& scene, camera_t& camera, int width, int height) {
 
 	//buildViScene(scene, camera, width, height);
 	//buildSkullScene(scene, camera, width, height);
-	buildCarScene(scene, camera, width, height);
+	//buildCarScene(scene, camera, width, height);
 	//buildTeapotScene(scene, camera, width, height);
-	//buildCornellBoxScene(scene, camera, width, height);
+	buildCornellBoxScene(scene, camera, width, height);
 
 }

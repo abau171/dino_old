@@ -41,6 +41,7 @@ static model_t* dev_models;
 static std::vector<bvh_node_t*> dev_bvhs;
 static std::vector<color3*> dev_textures;
 static instance_t* dev_instances;
+static float* dev_found_depth;
 
 __device__ int kernel_render_width, kernel_render_height, kernel_render_n;
 __device__ color3* kernel_render_buffer;
@@ -736,6 +737,11 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 	cudaGLUnmapBufferObject(gl_image_buffer);
 
+	if (cudaMalloc(&dev_found_depth, sizeof(float)) != cudaSuccess) {
+		std::cout << "Cannot allocate enough GPU memory." << std::endl;
+		return false;
+	}
+
 	return true;
 
 }
@@ -802,5 +808,75 @@ void getRenderStatus(int& _render_count, double& render_time) {
 	std::chrono::time_point<std::chrono::steady_clock> cur_time = std::chrono::high_resolution_clock::now();
 	long long dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(cur_time - start_time).count();
 	render_time = (double) dt_ms * 0.001;
+
+}
+
+__global__ void imageDepthKernel(camera_t camera, int x, int y, float* found_depth) {
+
+	float screen_x = (float) x / kernel_render_width - 0.5f;
+	float screen_y = (float) y / kernel_render_height - 0.5f;
+
+	vec3 ray_start = camera.position;
+	vec3 ray_direction = camera.forward + camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y;
+	ray_direction.normalize();
+
+	float t = INFINITY;
+
+	for (int i = 0; i < kernel_num_spheres; i++) {
+
+		float test_t = kernel_spheres[i].shape.intersect(ray_start, ray_direction);
+
+		if (test_t >= 0.0f && test_t < t) {
+			t = test_t;
+		}
+
+	}
+
+	for (int i = 0; i < kernel_num_instances; i++) {
+
+		instance_t instance = kernel_instances[i];
+		model_t model = kernel_models[instance.model_index];
+
+		vec3 trans_ray_start = instance.inv_transform * ray_start;
+		vec3 trans_ray_direction = instance.inv_transform.apply_rot(ray_direction);
+
+		int tri_index;
+		float test_t = intersect_bvh(model.bvh, model.tri_start, trans_ray_direction, trans_ray_start, tri_index);
+		if (tri_index >= 0 && test_t >= 0.0f && test_t < t) {
+			t = test_t;
+		}
+
+	}
+
+	*found_depth = t * ray_direction.dot(camera.forward);
+
+}
+
+float getImageDepth(camera_t& camera, int x, int y) {
+
+	imageDepthKernel<<<1, 1>>>(camera, x, y, dev_found_depth);
+
+	cudaError_t cudaStatus;
+
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		std::cout << "Error launching image depth kernel: " << cudaGetErrorString(cudaStatus) << std::endl;
+		return false;
+	}
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		std::cout << "Error synchronizing with device: " << cudaGetErrorString(cudaStatus) << std::endl;
+		return false;
+	}
+
+	float found_depth;
+	cudaStatus = cudaMemcpy(&found_depth, dev_found_depth, sizeof(float), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess) {
+		std::cout << "Cannot download image depth." << std::endl;
+		return false;
+	}
+
+	return found_depth;
 
 }

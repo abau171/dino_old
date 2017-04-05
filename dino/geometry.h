@@ -51,6 +51,7 @@ struct triangle_t {
 	__device__ void barycentric(vec3 point, float& u, float& v, float& w);
 
 	aabb_t getBound() {
+
 		aabb_t bound;
 		bound.low.x = fminf(fminf(a.x, a.x + ab.x), a.x + ac.x);
 		bound.low.y = fminf(fminf(a.y, a.y + ab.y), a.y + ac.y);
@@ -58,7 +59,13 @@ struct triangle_t {
 		bound.high.x = fmaxf(fmaxf(a.x, a.x + ab.x), a.x + ac.x);
 		bound.high.y = fmaxf(fmaxf(a.y, a.y + ab.y), a.y + ac.y);
 		bound.high.z = fmaxf(fmaxf(a.z, a.z + ab.z), a.z + ac.z);
+
+		vec3 tiny = {0.0001f, 0.0001f, 0.0001f};
+		bound.low -= tiny;
+		bound.high += tiny;
+
 		return bound;
+
 	}
 
 };
