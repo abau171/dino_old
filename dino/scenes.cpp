@@ -4,6 +4,21 @@
 
 #include "scenes.h"
 
+/*
+
+Note to the reader:
+
+I used this file to play with scene construction. Ultimately, a better idea
+would be to add support for some sort of scene description language, but this
+is just easier since I was never distributing binaries of the renderer.
+
+If you want to play with this renderer, this would be the place to start. Some
+of the files (mainly 3D models) I used are not included due to licensing, but
+there are many sources of free 3D models on the internet. Most simple .obj
+files should work fine. Only .png files are supported for textures.
+
+*/
+
 //scene.addInstance(cube_model_index);
 //scene.setDiffuse({0.6f, 0.6f, 0.6f});
 //scene.scale(100.0f);
@@ -48,6 +63,9 @@
 //scene.scale(2.5f);
 //scene.translate({0.0f, 1.5f, 0.0f});
 
+/*
+Construct the scene and initialize the camera.
+*/
 void buildScene(scene_t& scene, camera_t& camera, int width, int height) {
 
 	camera.init({0.0f, 4.0f, 7.0f}, (float) width / height);

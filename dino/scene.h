@@ -9,11 +9,17 @@
 #include "bvh.h"
 #include "texture.h"
 
+/*
+Scene camera data structure.
+*/
 struct camera_t {
 
 	vec3 position, forward, up, right;
 	float phi, theta, aspect_ratio, aperture_radius, focal_distance;
 
+	/*
+	Initialize the camera.
+	*/
 	void init(vec3 new_position, float new_aspect_ratio, float new_aperture_radius = 0.0f, float new_focal_distance = 0.1f) {
 
 		position = new_position;
@@ -29,6 +35,9 @@ struct camera_t {
 
 	}
 
+	/*
+	Set the direction the camera is pointing.
+	*/
 	void set_rotation(float new_phi, float new_theta) {
 
 		phi = new_phi;
@@ -44,18 +53,27 @@ struct camera_t {
 
 	}
 
+	/*
+	Rotate the camera.
+	*/
 	void rotate(float d_phi, float d_theta) {
 
 		set_rotation(phi + d_phi, theta + d_theta);
 
 	}
 
+	/*
+	Adjust the camera aperture.
+	*/
 	void updateApertureRadius(float d_radius) {
 
 		aperture_radius = fmaxf(0.0f, aperture_radius + d_radius);
 
 	}
 
+	/*
+	Adjust the camera focal distance.
+	*/
 	void updateFocalDistance(float d_dist) {
 
 		focal_distance = fmaxf(0.1f, focal_distance + d_dist);
@@ -64,6 +82,9 @@ struct camera_t {
 
 };
 
+/*
+Structure describing the surface reflection properties of an object.
+*/
 struct surface_t {
 	float specular_weight, transmission_weight; // first checks for specular reflection, if not then checks for transmission vs diffuse
 	float specular_power; // specular_power=0 means perfect reflection
@@ -72,26 +93,41 @@ struct surface_t {
 	bool interpolate_normals;
 };
 
+/*
+Structure describing the properties of an object's volume.
+*/
 struct volume_t {
 	float refractive_index, scatter, scatter_g;
 	color3 attenuation;
 };
 
+/*
+Structure describing the physical properties of an object.
+*/
 struct material_t {
 	surface_t surface;
 	volume_t volume;
 };
 
+/*
+Sphere object structure.
+*/
 struct sphere_instance_t {
 	sphere_t shape;
 	material_t material;
 };
 
+/*
+3D model object structure.
+*/
 struct model_t {
 	int tri_start, tri_end;
 	bvh_node_t* bvh;
 };
 
+/*
+Structure describing an instance of a 3D model.
+*/
 struct instance_t {
 	int model_index, texture_index;
 	mat4 transform;
@@ -101,12 +137,18 @@ struct instance_t {
 	int texture_width, texture_height;
 };
 
+/*
+Extra scene parameters uploaded to GPU to be used during a render.
+*/
 struct scene_parameters_t {
 	int max_depth;
 	volume_t air_volume;
 	color3 background_emission;
 };
 
+/*
+Full scene description structure.
+*/
 struct scene_t {
 
 	scene_parameters_t params;
@@ -123,6 +165,9 @@ struct scene_t {
 	std::vector<texture_t> textures;
 	std::vector<instance_t> instances;
 
+	/*
+	Initialize the scene.
+	*/
 	void init() {
 
 		params.max_depth = 2;
@@ -131,18 +176,27 @@ struct scene_t {
 
 	}
 
+	/*
+	Set the maximum recursion depth of the path tracing algorithm.
+	*/
 	void setMaxDepth(int max_depth) {
 
 		params.max_depth = max_depth;
 
 	}
 
+	/*
+	Set the background emission color.
+	*/
 	void setBackgroundEmission(color3 emission) {
 
 		params.background_emission = emission.gammaToLinear();
 
 	}
 
+	/*
+	Add a sphere to the scene.
+	*/
 	void addSphere(vec3 center, float radius) {
 
 		material_t material = {{
@@ -169,6 +223,9 @@ struct scene_t {
 
 	}
 
+	/*
+	Load a 3D model from an .obj file into the scene.
+	*/
 	int addModel(std::string filename) {
 
 		int tri_start = (int) triangles.size();
@@ -200,6 +257,9 @@ struct scene_t {
 
 	}
 
+	/*
+	Load a texture from a .png file into the scene.
+	*/
 	int addTexture(std::string filename) {
 
 		texture_t tex;
@@ -217,6 +277,9 @@ struct scene_t {
 
 	}
 
+	/*
+	Add a new instance of a model to the scene.
+	*/
 	void addInstance(int model_index, int texture_index=-1) {
 
 		material_t material = {{
@@ -249,71 +312,119 @@ struct scene_t {
 
 	}
 
+	/*
+	Set the specular weight of the last added object.
+	*/
 	void setSpecularWeight(float specular_weight) {
 		last_material->surface.specular_weight = specular_weight;
 	}
 
+	/*
+	Set the transmission weight of the last added object.
+	*/
 	void setTransmissionWeight(float transmission_weight) {
 		last_material->surface.transmission_weight = transmission_weight;
 	}
 
+	/*
+	Set the specular distribution exponent of the last added object.
+	*/
 	void setSpecularPower(float specular_power) {
 		last_material->surface.specular_power = specular_power;
 	}
 
+	/*
+	Set the transmission distribution exponent of the last added object.
+	*/
 	void setTransmissionPower(float transmission_power) {
 		last_material->surface.transmission_power = transmission_power;
 	}
 
+	/*
+	Set the refractive index of the last added object.
+	*/
 	void setRefractiveIndex(float refractive_index) {
 		last_material->volume.refractive_index = refractive_index;
 	}
 
+	/*
+	Set the diffuse color of the last added object.
+	*/
 	void setDiffuse(color3 diffuse) {
 		last_material->surface.diffuse = diffuse.gammaToLinear();
 	}
 
+	/*
+	Set the specular color of the last added object.
+	*/
 	void setSpecular(color3 specular) {
 		last_material->surface.specular = specular.gammaToLinear();
 	}
 
+	/*
+	Set the emission color of the last added object.
+	*/
 	void setEmission(color3 emission, float emission_intensity) {
 		last_material->surface.emission = emission.gammaToLinear() * emission_intensity;
 	}
 
+	/*
+	Set the attenuation color of the last added object.
+	*/
 	void setAttenuation(color3 attenuation) {
 		last_material->volume.attenuation = attenuation.gammaToLinear();
 	}
 
+	/*
+	Set the scattering properties of the last added object.
+	*/
 	void setScatter(float scatter, float scatter_g = 0.0f) {
 		last_material->volume.scatter = scatter;
 		last_material->volume.scatter_g = scatter_g;
 	}
 
+	/*
+	Toggle normal interpolation of the last added object.
+	*/
 	void setInterpolateNormals(bool interpolate) {
 		last_material->surface.interpolate_normals = interpolate;
 	}
 
+	/*
+	Translate the last added object.
+	*/
 	void translate(vec3 translation) {
 		*last_transform = mat4_translation(translation) * (*last_transform);
 		*last_inv_transform = last_transform->invert();
 	}
 
+	/*
+	Scale the last added object.
+	*/
 	void scale(float scalar) {
 		*last_transform = mat4_scale(scalar) * (*last_transform);
 		*last_inv_transform = last_transform->invert();
 	}
 
+	/*
+	Rotate the last added object about the x-axis.
+	*/
 	void rotate_x(float radians) {
 		*last_transform = mat4_rotate_x(radians) * (*last_transform);
 		*last_inv_transform = last_transform->invert();
 	}
 
+	/*
+	Rotate the last added object about the y-axis.
+	*/
 	void rotate_y(float radians) {
 		*last_transform = mat4_rotate_y(radians) * (*last_transform);
 		*last_inv_transform = last_transform->invert();
 	}
 
+	/*
+	Rotate the last added object about the z-axis.
+	*/
 	void rotate_z(float radians) {
 		*last_transform = mat4_rotate_z(radians) * (*last_transform);
 		*last_inv_transform = last_transform->invert();

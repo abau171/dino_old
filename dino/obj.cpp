@@ -10,6 +10,10 @@
 
 #include "obj.h"
 
+/*
+Extract the vertex, texture coordinate, and vertex normal indices from an
+.obj-style definition.
+*/
 static void extractDefinition(std::string definition, int& vertex_index, int& texture_index, int& normal_index) {
 
 	std::istringstream ss(definition);
@@ -52,6 +56,9 @@ static void extractDefinition(std::string definition, int& vertex_index, int& te
 
 }
 
+/*
+Handle a single line of an open .obj file.
+*/
 static void processLine(ModelBuilder& builder, std::string line) {
 
 	std::stringstream stream(line);
@@ -60,6 +67,7 @@ static void processLine(ModelBuilder& builder, std::string line) {
 	stream >> type_string;
 
 	if (type_string.compare("v") == 0) {
+		// add a vertex
 
 		vec3 vertex;
 		stream >> vertex.x;
@@ -69,6 +77,7 @@ static void processLine(ModelBuilder& builder, std::string line) {
 		builder.addVertex(vertex);
 
 	} else if (type_string.compare("vn") == 0) {
+		// add a vertex normal
 
 		vec3 normal;
 		stream >> normal.x;
@@ -78,6 +87,7 @@ static void processLine(ModelBuilder& builder, std::string line) {
 		builder.addNormal(normal);
 
 	} else if (type_string.compare("vt") == 0) {
+		// add a UV coordinate
 
 		uv_t uv;
 		stream >> uv.u;
@@ -86,6 +96,8 @@ static void processLine(ModelBuilder& builder, std::string line) {
 		builder.addUV(uv);
 
 	} else if (type_string.compare("f") == 0) {
+		// add a triangle, or a quad consisting of two triangles
+		//     - no higher-degree polygons are accepted
 
 		int av, bv, cv, an, bn, cn, at, bt, ct;
 		std::string definition;
@@ -117,6 +129,9 @@ static void processLine(ModelBuilder& builder, std::string line) {
 
 }
 
+/*
+Load an .obj file into 3D model data.
+*/
 void loadObj(std::string filename, std::vector<triangle_t>& triangles, std::vector<triangle_extra_t>& extras) {
 
 	std::cout << "Loading OBJ file: " << filename << std::endl;

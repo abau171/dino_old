@@ -7,6 +7,9 @@
 
 #include "texture.h"
 
+/*
+Load a texture from a .png file.
+*/
 bool loadTexture(std::string filename, texture_t& tex) {
 
 	std::vector<unsigned char> raw_data;

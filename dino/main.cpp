@@ -40,10 +40,14 @@ static bool do_clear = false;
 static bool paused = false;
 static bool locked = false;
 
+/*
+Save a rendered image to a file.
+*/
 void saveImage(bool promptForName) {
 
 	output_color_t* output_buffer = downloadOutputBuffer();
 
+	// load the image into a LodePNG-compatible buffer
 	std::vector<unsigned char> image_vector;
 	image_vector.resize(WIDTH * HEIGHT * 4);
 	for (int y = 0; y < HEIGHT; y++) {
@@ -56,6 +60,7 @@ void saveImage(bool promptForName) {
 		}
 	}
 
+	// encode the .png using LodePNG
 	std::vector<unsigned char> png;
 	unsigned int error = lodepng::encode(png, image_vector, WIDTH, HEIGHT);
 	if (error) {
@@ -63,6 +68,7 @@ void saveImage(bool promptForName) {
 		return;
 	}
 
+	// determine the default file name
 	time_t t = time(0);
 	struct tm now;
 	localtime_s(&now, &t);
@@ -74,6 +80,7 @@ void saveImage(bool promptForName) {
 		std::to_string(now.tm_min) + "-" +
 		std::to_string(now.tm_sec);
 
+	// prompt for an override name if desired
 	if (promptForName) {
 
 		std::cout << "Save file as ?.png: ";
@@ -88,12 +95,18 @@ void saveImage(bool promptForName) {
 
 	filename.append(".png");
 
+	// save the image file
 	lodepng::save_file(png, filename);
 	std::cout << "'" << filename << "' saved." << std::endl;
 
 }
 
+/*
+Update the camera state every frame.
+*/
 static void cameraUpdate() {
+
+	// calculate a delta time value
 
 	auto cur_time = std::chrono::high_resolution_clock::now();
 	long long dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(cur_time - last_time).count();
@@ -101,6 +114,8 @@ static void cameraUpdate() {
 
 	float dt = dt_ms * 0.001f;
 	float speed = dt * MOVEMENT_SPEED;
+
+	// only update the state if the camera is not locked
 
 	if (!locked) {
 
@@ -154,8 +169,12 @@ static void cameraUpdate() {
 
 }
 
+/*
+Run all per-frame functions.
+*/
 static void tick(int) {
 
+	// run the functions if not paused
 	if (!paused) {
 
 		cameraUpdate();
@@ -164,21 +183,31 @@ static void tick(int) {
 
 	}
 
+	// reset the timer
 	glutTimerFunc(1, tick, 0);
 
 }
 
+/*
+Set the pixel location for the next OpenGL raster text.
+*/
 static void displayTextPixel(int x, int y) {
 
 	glRasterPos2f(2.0f * ((float) x / WIDTH) - 1.0f, 1.0f - 2.0f * ((float) y / HEIGHT));
 
 }
 
+/*
+Set the pixel location to a specific line for the next OpenGL raster text.
+*/
 static void displayTextLine(int l) {
 
 	displayTextPixel(10, 20 + l * 14);
 }
 
+/*
+Write a text string to the OpenGL display window.
+*/
 static void displayText(std::string s) {
 
 	for (int i = 0; i < s.size(); i++) {
@@ -187,6 +216,9 @@ static void displayText(std::string s) {
 
 }
 
+/*
+Display all UI information on top of the rendered image in the OpenGL window.
+*/
 static void displayUIText() {
 
 	int render_count;
@@ -232,6 +264,9 @@ static void displayUIText() {
 
 }
 
+/*
+Redraw the OpenGL display from the rendered image buffer.
+*/
 void display() {
 
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -255,6 +290,9 @@ void display() {
 
 }
 
+/*
+Accept keyboard input.
+*/
 void keyboard(unsigned char key, int x, int y) {
 
 	switch (key) {
@@ -311,6 +349,9 @@ void keyboard(unsigned char key, int x, int y) {
 
 }
 
+/*
+Accept keyboard input.
+*/
 void keyboardUp(unsigned char key, int x, int y) {
 
 	switch (key) {
@@ -348,6 +389,9 @@ void keyboardUp(unsigned char key, int x, int y) {
 
 }
 
+/*
+Accept mouse input.
+*/
 void mouse(int button, int state, int x, int y) {
 
 	if (button == GLUT_LEFT_BUTTON) {
@@ -369,6 +413,9 @@ void mouse(int button, int state, int x, int y) {
 
 }
 
+/*
+Accept mouse input.
+*/
 void motion(int x, int y) {
 
 	if (left_mouse && x != mouse_x && y != mouse_y) {
@@ -390,6 +437,9 @@ void motion(int x, int y) {
 
 }
 
+/*
+Initialize the renderer, open a display window, and kick-off the render loop.
+*/
 int main(int argc, char** argv) {
 
 	scene.init();

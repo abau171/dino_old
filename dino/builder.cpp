@@ -6,6 +6,9 @@
 
 #include "builder.h"
 
+/*
+Convert an .obj-style index to an absolute index.
+*/
 int ModelBuilder::fixIndex(int index, int size) {
 
 	if (index >= 0) {
@@ -16,24 +19,37 @@ int ModelBuilder::fixIndex(int index, int size) {
 
 }
 
+/*
+Add a vertex to the model.
+*/
 void ModelBuilder::addVertex(vec3 vertex) {
 
 	vertices.push_back(vertex);
 
 }
 
+/*
+Add a vertex normal to the model.
+*/
 void ModelBuilder::addNormal(vec3 normal) {
 
 	normals.push_back(normal);
 
 }
 
+/*
+Add a UV coordinate to the model.
+*/
 void ModelBuilder::addUV(uv_t uv) {
 
 	uvs.push_back(uv);
 
 }
 
+/*
+Add a triangle to the model.
+This includes 3 each of vertex, vertex normal, and texture coordinate indices.
+*/
 void ModelBuilder::addTriangle(int av, int bv, int cv, int an, int bn, int cn, int at, int bt, int ct) {
 
 	triangles.push_back({
@@ -49,14 +65,18 @@ void ModelBuilder::addTriangle(int av, int bv, int cv, int an, int bn, int cn, i
 
 }
 
+/*
+Clears all input vertex normals, and guesses what they should be for each vertex.
+*/
 void ModelBuilder::estimateNormals() {
 
+	// clear all normals
 	normals.resize(vertices.size());
-
 	for (int i = 0; i < normals.size(); i++) {
 		normals[i] = {0.0f, 0.0f, 0.0f};
 	}
 
+	// set each vertex to the sum of the normals of each adjacent triangle
 	for (int i = 0; i < triangles.size(); i++) {
 
 		builder_triangle_t& btri = triangles[i];
@@ -78,19 +98,25 @@ void ModelBuilder::estimateNormals() {
 
 	}
 
+	// normalize the sums to find the final estimate normals
 	for (int i = 0; i < normals.size(); i++) {
 		normals[i].normalize();
 	}
 
 }
 
+/*
+Add simple placeholder values for each UV coordinate.
+*/
 void ModelBuilder::fakeUVs() {
 
+	// add one set of UV coordinates
 	uvs.resize(3);
 	uvs[0] = {0.0f, 0.0f};
 	uvs[1] = {1.0f, 0.0f};
 	uvs[2] = {0.0f, 1.0f};
 
+	// give all triangles the same UV coordinates
 	for (int i = 0; i < triangles.size(); i++) {
 
 		builder_triangle_t& btri = triangles[i];
@@ -103,8 +129,12 @@ void ModelBuilder::fakeUVs() {
 
 }
 
+/*
+Extract the final 3D model data from the model builder into provided vectors.
+*/
 void ModelBuilder::extractModel(std::vector<triangle_t>& final_triangles, std::vector<triangle_extra_t>& extras) {
 
+	// if any normals are missing, estimate all normals
 	for (int i = 0; i < triangles.size(); i++) {
 
 		builder_triangle_t btri = triangles[i];
@@ -116,6 +146,7 @@ void ModelBuilder::extractModel(std::vector<triangle_t>& final_triangles, std::v
 
 	}
 
+	// if any UV coordinates are missing, fake all UV coordinates
 	for (int i = 0; i < triangles.size(); i++) {
 
 		builder_triangle_t btri = triangles[i];
@@ -127,6 +158,7 @@ void ModelBuilder::extractModel(std::vector<triangle_t>& final_triangles, std::v
 
 	}
 
+	// add each triangle and related information to the provided vectors
 	for (int i = 0; i < triangles.size(); i++) {
 
 		builder_triangle_t btri = triangles[i];

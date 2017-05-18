@@ -7,14 +7,24 @@
 #define INV_GAMMA_EXP (2.2f)
 #define GAMMA_EXP (1.0f / INV_GAMMA_EXP)
 
+/*
+GPU-friendly 3-dimensional float vector.
+Supports many useful mathematical operations on both CPU and GPU.
+*/
 struct vec3 {
 
 	float x, y, z;
 
+	/*
+	Add two vectors.
+	*/
 	__host__ __device__ vec3 operator+(vec3 other) {
 		return {x + other.x, y + other.y, z + other.z};
 	}
 
+	/*
+	Add a vector to this vector.
+	*/
 	__host__ __device__  vec3 operator+=(vec3 other) {
 		x += other.x;
 		y += other.y;
@@ -22,14 +32,23 @@ struct vec3 {
 		return *this;
 	}
 
+	/*
+	Negate this vector.
+	*/
 	__host__ __device__ vec3 operator-() {
 		return {-x, -y, -z};
 	}
 
+	/*
+	Find the difference between vectors.
+	*/
 	__host__ __device__ vec3 operator-(vec3 other) {
 		return {x - other.x, y - other.y, z - other.z};
 	}
 
+	/*
+	Subtract a vector from this vector.
+	*/
 	__host__ __device__ vec3 operator-=(vec3 other) {
 		x -= other.x;
 		y -= other.y;
@@ -37,10 +56,16 @@ struct vec3 {
 		return *this;
 	}
 
+	/*
+	Multiply a vector by a scalar.
+	*/
 	__host__ __device__ vec3 operator*(float scalar) {
 		return {scalar * x, scalar * y, scalar * z};
 	}
 
+	/*
+	Multiply this vector by a scalar.
+	*/
 	__host__ __device__ vec3 operator*=(float scalar) {
 		x *= scalar;
 		y *= scalar;
@@ -50,10 +75,16 @@ struct vec3 {
 
 	// these two can be dangerous: they are easy to mix with dot product
 
+	///*
+	//Find the component-wise product of two vectors.
+	//*/
 	//__host__ __device__ vec3 operator*(vec3 other) {
 	//	return {other.x * x, other.y * y, other.z * z};
 	//}
 
+	///*
+	//Component-wise multiply this vector by another vector.
+	//*/
 	//__host__ __device__ vec3 operator*=(vec3 other) {
 	//	x *= other.x;
 	//	y *= other.y;
@@ -61,10 +92,16 @@ struct vec3 {
 	//	return *this;
 	//}
 
+	/*
+	Divide a vector by a scalar.
+	*/
 	__host__ __device__ vec3 operator/(float scalar) {
 		return {x / scalar, y / scalar, z / scalar};
 	}
 
+	/*
+	Divide this vector by a scalar.
+	*/
 	__host__ __device__ vec3 operator/=(float scalar) {
 		x /= scalar;
 		y /= scalar;
@@ -72,14 +109,24 @@ struct vec3 {
 		return *this;
 	}
 
+	/*
+	Find the square of the magnitude of this vector.
+	This is a faster operation than finding the actual magnitude.
+	*/
 	__host__ __device__ float magnitude_2() {
 		return x * x + y * y + z * z;
 	}
 
+	/*
+	Find the magnitude of this vector.
+	*/
 	__host__ __device__ float magnitude() {
 		return std::sqrtf(x * x + y * y + z * z);
 	}
 
+	/*
+	Normalize this vector.
+	*/
 	__host__ __device__ void normalize() {
 		float mag = magnitude();
 		x /= mag;
@@ -87,10 +134,16 @@ struct vec3 {
 		z /= mag;
 	}
 
+	/*
+	Find the dot product of two vectors.
+	*/
 	__host__ __device__ float dot(vec3 other) {
 		return x * other.x + y * other.y + z * other.z;
 	}
 
+	/*
+	Find the cross product of two vectors.
+	*/
 	__host__ __device__ vec3 cross(vec3 other) {
 		return {
 			(y * other.z) - (z * other.y),
@@ -99,14 +152,24 @@ struct vec3 {
 		};
 	};
 
+	/*
+	Reflect a vector off of a plane by its normal vector.
+	*/
 	__host__ __device__ vec3 reflect(vec3 normal) {
 		return *this - normal * (2.0f * this->dot(normal));
 	}
 
+	/*
+	Align the coordinates of a vector with a new coordinate system.
+	*/
 	__host__ __device__ vec3 change_coord_system(vec3 cx, vec3 cy, vec3 cz) {
 		return cx * x + cy * y + cz * z;
 	}
 
+	/*
+	Modify the coordinates of a vector so its y component points in the direction
+	of the provided vector.
+	*/
 	__host__ __device__ vec3 change_up(vec3 cy) {
 		// cy assumed normalized
 		vec3 cx = cy.cross({0.0f, 1.0f, 0.0f});
@@ -117,14 +180,24 @@ struct vec3 {
 
 };
 
+/*
+GPU-friendly RGB color structure.
+Supports many useful mathematical operations on both CPU and GPU.
+*/
 struct color3 {
 
 	float r, g, b;
 
+	/*
+	Add two colors.
+	*/
 	__host__ __device__ color3 operator+(color3 other) {
 		return {r + other.r, g + other.g, b + other.b};
 	}
 
+	/*
+	Add a color to this color.
+	*/
 	__host__ __device__ color3 operator+=(color3 other) {
 		r += other.r;
 		g += other.g;
@@ -132,14 +205,23 @@ struct color3 {
 		return *this;
 	}
 
+	/*
+	Negate this color.
+	*/
 	__host__ __device__ color3 operator-() {
 		return {-r, -g, -b};
 	}
 
+	/*
+	Find the difference between two colors.
+	*/
 	__host__ __device__ color3 operator-(color3 other) {
 		return {r - other.r, g - other.g, b - other.b};
 	}
 
+	/*
+	Subtract a color from this color.
+	*/
 	__host__ __device__ color3 operator-=(color3 other) {
 		r -= other.r;
 		g -= other.g;
@@ -147,10 +229,16 @@ struct color3 {
 		return *this;
 	}
 
+	/*
+	Multiply a color by a scalar.
+	*/
 	__host__ __device__ color3 operator*(float scalar) {
 		return {scalar * r, scalar * g, scalar * b};
 	}
 
+	/*
+	Multiply this color by a scalar.
+	*/
 	__host__ __device__ color3 operator*=(float scalar) {
 		r *= scalar;
 		g *= scalar;
@@ -158,10 +246,16 @@ struct color3 {
 		return *this;
 	}
 
+	/*
+	Component-wise multiply two colors.
+	*/
 	__host__ __device__ color3 operator*(color3 other) {
 		return {other.r * r, other.g * g, other.b * b};
 	}
 
+	/*
+	Component-wise multiply this color with another color.
+	*/
 	__host__ __device__ color3 operator*=(color3 other) {
 		r *= other.r;
 		g *= other.g;
@@ -169,10 +263,16 @@ struct color3 {
 		return *this;
 	}
 
+	/*
+	Divide a color by a scalar.
+	*/
 	__host__ __device__ color3 operator/(float scalar) {
 		return {r / scalar, g / scalar, b / scalar};
 	}
 
+	/*
+	Divide this color by a scalar.
+	*/
 	__host__ __device__ color3 operator/=(float scalar) {
 		r /= scalar;
 		g /= scalar;
@@ -180,6 +280,9 @@ struct color3 {
 		return *this;
 	}
 
+	/*
+	Convert a color from gamma-space to linear-space.
+	*/
 	__host__ __device__ color3 gammaToLinear() {
 		return {
 			powf(r, INV_GAMMA_EXP),
@@ -188,6 +291,9 @@ struct color3 {
 		};
 	}
 
+	/*
+	Convert a color from linear-space to gamma-space.
+	*/
 	__host__ __device__ color3 linearToGamma() {
 		return {
 			powf(r, GAMMA_EXP),
@@ -197,10 +303,16 @@ struct color3 {
 	}
 };
 
+/*
+GPU-friendly 4-dimensional transformation matrix.
+*/
 struct mat4 {
 
 	float cells[3][4];
 
+	/*
+	Multiply a vector by a matrix.
+	*/
 	__host__ __device__ vec3 operator*(vec3 v) {
 
 		vec3 result;
@@ -212,6 +324,9 @@ struct mat4 {
 
 	}
 
+	/*
+	Multiply two matrices.
+	*/
 	__host__ __device__ mat4 operator*(mat4 other) {
 
 		mat4 result;
@@ -231,6 +346,10 @@ struct mat4 {
 
 	}
 
+	/*
+	Invert this transformation matrix.
+	https://github.com/arkanis/single-header-file-c-libs/blob/master/math_3d.h
+	*/
 	__host__ __device__ mat4 invert() {
 
 		float c00 = cells[0][0];
@@ -278,6 +397,9 @@ struct mat4 {
 
 	}
 
+	/*
+	Find the transpose of the rotation portion of this matrix.
+	*/
 	__host__ __device__ mat4 matrix_rot_transpose() {
 
 		mat4 transpose;
@@ -296,6 +418,9 @@ struct mat4 {
 
 	}
 
+	/*
+	Apply the rotation portion of this matrix to a vector.
+	*/
 	__host__ __device__ vec3 apply_rot(vec3 v) {
 
 		vec3 result;
@@ -309,6 +434,9 @@ struct mat4 {
 
 };
 
+/*
+Return an identity matrix.
+*/
 __host__ __device__ inline mat4 mat4_identity() {
 
 	mat4 matrix = {
@@ -320,6 +448,9 @@ __host__ __device__ inline mat4 mat4_identity() {
 
 }
 
+/*
+Return a translation matrix.
+*/
 __host__ __device__ inline mat4 mat4_translation(vec3 translation) {
 
 	mat4 matrix = {
@@ -331,6 +462,9 @@ __host__ __device__ inline mat4 mat4_translation(vec3 translation) {
 
 }
 
+/*
+Return a scalar matrix.
+*/
 __host__ __device__ inline mat4 mat4_scale(float scalar) {
 
 	mat4 matrix = {
@@ -342,6 +476,9 @@ __host__ __device__ inline mat4 mat4_scale(float scalar) {
 
 }
 
+/*
+Return a rotation matrix about the x-axis.
+*/
 __host__ __device__ inline mat4 mat4_rotate_x(float radians) {
 
 	mat4 matrix = {
@@ -353,6 +490,9 @@ __host__ __device__ inline mat4 mat4_rotate_x(float radians) {
 
 }
 
+/*
+Return a rotation matrix about the y-axis.
+*/
 __host__ __device__ inline mat4 mat4_rotate_y(float radians) {
 
 	mat4 matrix = {
@@ -364,6 +504,9 @@ __host__ __device__ inline mat4 mat4_rotate_y(float radians) {
 
 }
 
+/*
+Return a rotation matrix about the z-axis.
+*/
 __host__ __device__ inline mat4 mat4_rotate_z(float radians) {
 
 	mat4 matrix = {
@@ -375,24 +518,39 @@ __host__ __device__ inline mat4 mat4_rotate_z(float radians) {
 
 }
 
+/*
+GPU-friendly UV coordinate structure.
+*/
 struct uv_t {
 
 	float u, v;
 
+	/*
+	Add two UV coordinate pairs.
+	*/
 	__host__ __device__ uv_t operator+(uv_t other) {
 		return {u + other.u, v + other.v};
 	}
 
+	/*
+	Add a UV coordinate pair to this one.
+	*/
 	__host__ __device__  uv_t operator+=(uv_t other) {
 		u += other.u;
 		v += other.v;
 		return *this;
 	}
 
+	/*
+	Scale two UV coordinate pairs.
+	*/
 	__host__ __device__ uv_t operator*(float scalar) {
 		return {scalar * u, scalar * v};
 	}
 
+	/*
+	Scale this UV coordinate pair.
+	*/
 	__host__ __device__ uv_t operator*=(float scalar) {
 		u *= scalar;
 		v *= scalar;

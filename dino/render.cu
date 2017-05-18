@@ -54,6 +54,9 @@ __device__ model_t* kernel_models;
 __device__ instance_t* kernel_instances;
 __device__ curandState* kernel_curand_state;
 
+/*
+Perform an intersection with a sphere.
+*/
 __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
 
 	float a = direction.magnitude_2();
@@ -81,6 +84,9 @@ __device__ float sphere_t::intersect(vec3 start, vec3 direction) {
 
 #define TRI_INT_EPSILON 0.000001f
 
+/*
+Perform an intersection with a triangle.
+*/
 __device__ float triangle_t::intersect(vec3 start, vec3 direction) {
 
 	vec3 P = direction.cross(ac);
@@ -102,6 +108,9 @@ __device__ float triangle_t::intersect(vec3 start, vec3 direction) {
 
 }
 
+/*
+Get the barycentric coordinates of a point coplanar to a triangle.
+*/
 __device__ void triangle_t::barycentric(vec3 point, float& u, float& v, float& w) {
 
 	vec3 ah = point - a;
@@ -119,19 +128,27 @@ __device__ void triangle_t::barycentric(vec3 point, float& u, float& v, float& w
 	u = 1.0f - v - w;
 
 }
-
+/*
+Interpolate between normals using barycentric coordinates.
+*/
 __device__ vec3 triangle_extra_t::interpolate_normals(float u, float v, float w) {
 
 	return an * u + bn * v + cn * w;
 
 }
 
+/*
+Interpolate between UV coordinates using barycentric coordinates.
+*/
 __device__ uv_t triangle_extra_t::interpolate_uvs(float u, float v, float w) {
 
 	return at * u + bt * v + ct * w;
 
 }
 
+/*
+Perform an intersection with an axis-aligned bounding box.
+*/
 __device__ float aabb_t::intersect(vec3 start, vec3 inv_direction) {
 
 	vec3 high_diff = high - start;
@@ -169,6 +186,10 @@ __device__ float aabb_t::intersect(vec3 start, vec3 inv_direction) {
 
 }
 
+/*
+Return a vector pointing in a random longitude direction (phi), given a
+latitude direction (theta).
+*/
 __device__ vec3 random_isotropic(float cos_theta, int n) {
 
 	float phi = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
@@ -184,6 +205,9 @@ __device__ vec3 random_isotropic(float cos_theta, int n) {
 	};
 }
 
+/*
+Return a random vector from a uniform sphere probability distribution.
+*/
 __device__ vec3 random_sphere(int n) {
 
 	float cos_theta = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
@@ -191,6 +215,10 @@ __device__ vec3 random_sphere(int n) {
 
 }
 
+/*
+Return a random vector from a uniform hemisphere probability distribution
+pointing in the positive y direction.
+*/
 __device__ vec3 random_hemi(int n) {
 
 	float cos_theta = curand_uniform(&kernel_curand_state[n]);
@@ -198,6 +226,10 @@ __device__ vec3 random_hemi(int n) {
 
 }
 
+/*
+Return a random vector from a Phong specular probability distribution pointing
+in the positive y direction.
+*/
 __device__ vec3 random_phong_hemi(float specular_power, int n) {
 
 	float cos_theta = __powf(curand_uniform(&kernel_curand_state[n]), 1.0f / (specular_power + 1.0f));
@@ -205,6 +237,12 @@ __device__ vec3 random_phong_hemi(float specular_power, int n) {
 
 }
 
+/*
+Return a random vector from a Henyey-Greenstein scatter probability distribution.
+This probability distribution is generated from the Henyey-Greenstein Phase
+Function.
+https://www.astro.umd.edu/~jph/HG_note.pdf
+*/
 __device__ vec3 random_henyey_greenstein(float g, int n) {
 
 	float s = 2.0f * curand_uniform(&kernel_curand_state[n]) - 1.0f;
@@ -222,6 +260,9 @@ __device__ vec3 random_henyey_greenstein(float g, int n) {
 
 }
 
+/*
+Return a random point on a 2D disk in 3D space.
+*/
 __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	float theta = 2.0f * M_PI * curand_uniform(&kernel_curand_state[n]);
 	float sin_theta, cos_theta;
@@ -230,9 +271,12 @@ __device__ vec3 confusion_disk(vec3 ortho1, vec3 ortho2, int n) {
 	return ortho1 * sqrtr * sin_theta + ortho2 * sqrtr * cos_theta;
 }
 
+/*
+Perform an intersection with a BVH.
+*/
 __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_direction, vec3 ray_start, int& tri_index) {
 
-	int stack[32];
+	int stack[32]; // CAUTION: this stack may not be big enough for very deep BVHs
 	int stack_index = 0;
 	stack[0] = 0;
 
@@ -244,6 +288,7 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 	inv_ray_direction.y = 1.0f / ray_direction.y;
 	inv_ray_direction.z = 1.0f / ray_direction.z;
 
+	// depth-first traversal without recursion (explicit stack used)
 	while (stack_index >= 0) {
 
 		bvh_node_t node = bvh[stack[stack_index]];
@@ -254,10 +299,13 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 
 		if (node.i1 & BVH_LEAF_MASK) {
 
+			// leaf node, intersect with all triangles
+
 			for (int i = tri_start + node.i0; i < tri_start + (node.i1 & BVH_I1_MASK); i++) {
 
 				float test_t = kernel_triangles[i].intersect(ray_start, ray_direction);
 				if (test_t >= 0.0f && test_t < t) {
+					// closest intersection point found so far, save it
 					t = test_t;
 					local_tri_index = i;
 				}
@@ -265,6 +313,8 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 			}
 
 		} else {
+
+			// inner node, traverse both subtrees
 
 			stack_index++;
 			stack[stack_index] = (node.i1 & BVH_I1_MASK);
@@ -280,15 +330,22 @@ __device__ float intersect_bvh(bvh_node_t* bvh, int tri_start, vec3 ray_directio
 
 }
 
+/*
+GPU kernel for initRender() function.
+Initialize the renderer. This should only be called once.
+*/
 __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, curandState* curand_state, sphere_instance_t* spheres, triangle_t* triangles, triangle_extra_t* extras, model_t* models, instance_t* instances, int render_width, int render_height, scene_parameters_t scene_params, int num_spheres, int num_triangles, int num_models, int num_instances) {
 
 	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	int y = blockDim.y * blockIdx.y + threadIdx.y;
 
+	// ignore spare threads
 	if (x < render_width && y < render_height) {
 
 		int n = render_height * x + y;
 
+		// if thread 0, save kernel variables
+		// (this may be better served as constant memory)
 		if (n == 0) {
 			kernel_render_width = render_width;
 			kernel_render_height = render_height;
@@ -307,8 +364,10 @@ __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, cu
 			kernel_curand_state = curand_state;
 		}
 
+		// initialize each thread's RNG state
 		curand_init(n, 0, 0, &curand_state[n]);
 
+		// initialize each thread's output point position
 		output_buffer[render_width * render_height + 2 * n + 0] = x;
 		output_buffer[render_width * render_height + 2 * n + 1] = y;
 
@@ -316,28 +375,39 @@ __global__ void initRenderKernel(float* output_buffer, color3* render_buffer, cu
 
 }
 
+/*
+GPU kernel for render() function.
+Runs a single pass of the renderer, updating the OpenGL image buffer.
+Multiple calls will refine the image by reducing noise.
+*/
 __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int render_count) {
 
 	int x = BLOCK_DIM * blockIdx.x + threadIdx.x;
 	int y = BLOCK_DIM * blockIdx.y + threadIdx.y;
 
+	// ignore spare threads
 	if (x < kernel_render_width && y < kernel_render_height) {
 
 		int n = kernel_render_height * x + y;
 
+		// calculate screen location
 		float screen_x = (x + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_width - 0.5f;
 		float screen_y = (y + curand_uniform(&kernel_curand_state[n]) - 0.5f) / kernel_render_height - 0.5f;
 
+		// calculate initial ray
 		vec3 dof_confusion = confusion_disk(camera.up, camera.right, n) * camera.aperture_radius;
 		vec3 ray_start = camera.position + dof_confusion;
 		vec3 ray_direction = (camera.forward + camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y) * camera.focal_distance - dof_confusion;
 		ray_direction.normalize();
 
+		// initialize path tracing color accumulation variables
 		color3 final_color = {0.0f, 0.0f, 0.0f};
 		color3 running_absorption = {1.0f, 1.0f, 1.0f};
 
+		// assume ray starts in open air
 		volume_t cur_volume = kernel_scene_params.air_volume;
 
+		// loop to the desired maximum depth
 		for (int depth = 0; depth < kernel_scene_params.max_depth; depth++) {
 
 			float t = INFINITY;
@@ -345,6 +415,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 			int obj_subindex = -1;
 			int obj_type;
 
+			// intersect all spheres
 			for (int i = 0; i < kernel_num_spheres; i++) {
 
 				float test_t = kernel_spheres[i].shape.intersect(ray_start, ray_direction);
@@ -357,6 +428,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 			}
 
+			// intersect all model instances
 			for (int i = 0; i < kernel_num_instances; i++) {
 
 				instance_t instance = kernel_instances[i];
@@ -376,6 +448,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 			}
 
+			// calculate random subsurface scattering distance
 			float scatter_t = (cur_volume.scatter > 0.0f) ? -__logf(curand_uniform(&kernel_curand_state[n])) / cur_volume.scatter : INFINITY;
 
 			if (t > scatter_t) { // scatter
@@ -394,6 +467,8 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 			} else if (obj_index != -1) { // interact with surface
 
 				vec3 surface_position = ray_start + ray_direction * t;
+
+				// extract surface information from the intersected object
 
 				material_t material;
 				vec3 normal, effective_normal;
@@ -457,6 +532,8 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 					effective_normal = -effective_normal;
 				}
 
+				// calculate volumetric attenuation through current medium
+
 				color3 attenuation = cur_volume.attenuation;
 				color3 beer = { // shortcut if any component is zero to get rid of fireflies
 					attenuation.r > 0.0f ? __expf(t * __logf(attenuation.r)) : 0.0f,
@@ -469,6 +546,8 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				vec3 off_surface = normal * 0.0001f; // add small amount to get off the surface (no shading acne)
 
 				float effective_specular_weight = material.surface.specular_weight;
+
+				// refraction and Fresnel reflection calculations
 
 				float n1 = exiting ? material.volume.refractive_index : kernel_scene_params.air_volume.refractive_index;
 				float n2 = exiting ? kernel_scene_params.air_volume.refractive_index : material.volume.refractive_index;
@@ -497,6 +576,8 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 				} else {
 					effective_specular_weight = 0.0f;
 				}
+
+				// now interact with the object surface
 
 				if (curand_uniform(&kernel_curand_state[n]) < effective_specular_weight) { // specular
 
@@ -554,7 +635,7 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 				}
 
-			} else {
+			} else { // no object intersection, intersect with background
 
 				final_color += running_absorption * kernel_scene_params.background_emission;
 				break;
@@ -562,8 +643,12 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 		}
 
+		// accumulate colors into buffer
+
 		final_color += kernel_render_buffer[n];
 		kernel_render_buffer[n] = final_color;
+
+		// calculate output color
 
 		color3 output_color = (final_color / render_count).linearToGamma() * 255.0f;
 		output_color = {
@@ -583,6 +668,9 @@ __global__ void renderKernel(output_color_t* output_buffer, camera_t camera, int
 
 }
 
+/*
+Clear the render buffer.
+*/
 bool clearRenderBuffer() {
 
 	if (cudaMemset(dev_render_buffer, 0, render_n * sizeof(color3)) != cudaSuccess) {
@@ -594,6 +682,9 @@ bool clearRenderBuffer() {
 
 }
 
+/*
+Initialize the renderer. This should only be called once.
+*/
 bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffer) {
 
 	render_width = width;
@@ -601,6 +692,8 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 	render_n = render_width * render_height;
 	render_count = 0;
 	gl_image_buffer = new_gl_image_buffer;
+
+	// initialize CUDA device, allocate buffers, link up with OpenGL buffer object
 
 	if (cudaSetDevice(0) != cudaSuccess) {
 		std::cout << "Cannot find CUDA device." << std::endl;
@@ -761,7 +854,13 @@ bool initRender(int width, int height, scene_t& scene, GLuint new_gl_image_buffe
 
 }
 
+/*
+Runs a single pass of the renderer, updating the OpenGL image buffer.
+Multiple calls will refine the image by reducing noise.
+*/
 bool render(camera_t& camera) {
+
+	// if a clear is queued, clear buffer before render
 
 	if (should_clear) {
 		clearRenderBuffer();
@@ -771,6 +870,8 @@ bool render(camera_t& camera) {
 	}
 
 	render_count++;
+
+	// perform a single render pass
 
 	cudaGLMapBufferObject((void**) &dev_output_buffer, gl_image_buffer);
 
@@ -798,12 +899,18 @@ bool render(camera_t& camera) {
 
 }
 
+/*
+Clear the current render state on the next render() call.
+*/
 void clearRender() {
 
 	should_clear = true;
 
 }
 
+/*
+Download the image from the GPU into a buffer in main memory.
+*/
 output_color_t* downloadOutputBuffer() {
 
 	output_color_t* output_buffer = new output_color_t[render_n];
@@ -816,6 +923,9 @@ output_color_t* downloadOutputBuffer() {
 
 }
 
+/*
+Get the number of render cycles and total elapsed render time.
+*/
 void getRenderStatus(int& _render_count, double& render_time) {
 
 	_render_count = render_count;
@@ -826,14 +936,24 @@ void getRenderStatus(int& _render_count, double& render_time) {
 
 }
 
+/*
+GPU kernel for imageDepth() function.
+Get the apparent distance of an object in the scene at a given pixel location.
+*/
 __global__ void imageDepthKernel(camera_t camera, int x, int y, float* found_depth) {
+
+	// calculate the screen location
 
 	float screen_x = (float) x / kernel_render_width - 0.5f;
 	float screen_y = (float) y / kernel_render_height - 0.5f;
 
+	// fire a ray straight forward (this should be deterministic)
+
 	vec3 ray_start = camera.position;
 	vec3 ray_direction = camera.forward + camera.right * camera.aspect_ratio * screen_x + camera.up * screen_y;
 	ray_direction.normalize();
+
+	// find and return the nearest intersection point
 
 	float t = INFINITY;
 
@@ -867,6 +987,9 @@ __global__ void imageDepthKernel(camera_t camera, int x, int y, float* found_dep
 
 }
 
+/*
+Get the apparent distance of an object in the scene at a given pixel location.
+*/
 float getImageDepth(camera_t& camera, int x, int y) {
 
 	imageDepthKernel<<<1, 1>>>(camera, x, y, dev_found_depth);
