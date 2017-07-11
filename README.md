@@ -1,5 +1,11 @@
-# dino
+# Dino
 Path-tracing GPU rendering engine.
+
+### Demos and Example Renders
+
+[Test Scene Demo Video](https://www.youtube.com/watch?v=fVtnDnm3HdQ)
+
+[Dragon Demo Video](https://www.youtube.com/watch?v=iqLyLICHI1Y)
 
 ![Example 1](dino/example_renders/colonial_1800_6m.png)
 ![Example 2](dino/example_renders/focused_caustics_4500_6m.png)
@@ -8,7 +14,12 @@ Path-tracing GPU rendering engine.
 
 ### About
 
-dino was developed as a final project developed for RIT's Global Illumination class. It is a toy implementation of the path tracing algorithm from Kajiya's The Rendering Equation paper. It has been extended to include visual effects from Cook et al.'s Distributed Ray Tracing paper (with modifications to work with path tracing. Rendering happens entirely on a GPU using Nvidia's CUDA API, and images are progressively refined and displayed in an interactive window.
+Dino was developed as a final project developed for RIT's Global Illumination class. It is a toy implementation of the path tracing algorithm from Kajiya's The Rendering Equation paper. It has been extended to include visual effects from Cook et al.'s Distributed Ray Tracing paper (with modifications to work with path tracing. Rendering happens entirely on a GPU using Nvidia's CUDA API, and images are progressively refined and displayed in an interactive window.
+
+Although all code was written from scratch, Dino's design was influenced by:
+- [Peter and Karl's GPU Path Tracer](http://gpupathtracer.blogspot.com/)
+- [Ray Tracey's GPU Path Tracing Blog Series](http://raytracey.blogspot.com/2015/10/gpu-path-tracing-tutorial-1-drawing.html)
+- [Blender Cycles Render Engine](https://docs.blender.org/manual/en/dev/render/cycles/)
 
 ### Features
 
@@ -17,7 +28,8 @@ dino was developed as a final project developed for RIT's Global Illumination cl
 - BVH spatial partitioning structures for models
 - Phong PDFs with importance sampling for diffuse and specular shading
 - perfect reflection, glossy reflection, transparency, translucency, refraction
-- Beer's law attenuation, subsurface scattering with Henyey-Greenstein phase function
+- Beer's law attenuation
+- subsurface scattering with Henyey-Greenstein phase function
 - depth of field
 - interactive camera
 
@@ -33,3 +45,9 @@ dino was developed as a final project developed for RIT's Global Illumination cl
 - O saves the rendered image, prompting for a file name
 - Shift + O saves the rendered image with a timestamp as the file name.
 - Q quits the application
+
+### Models Used
+
+- Standford Dragon: http://graphics.stanford.edu/data/3Dscanrep/
+- Watertight Utah Teapot: http://goanna.cs.rmit.edu.au/~pknowles/models.html
+- Colonial Buildings: https://sketchfab.com/
