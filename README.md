@@ -1,11 +1,13 @@
 # Dino
 Path-tracing GPU rendering engine.
 
-### Demos and Example Renders
+### Video Demos
 
-[Test Scene Demo Video](https://www.youtube.com/watch?v=fVtnDnm3HdQ)
+[![Test Scene Demo Video](https://img.youtube.com/vi/fVtnDnm3HdQ/0.jpg)](https://www.youtube.com/watch?v=fVtnDnm3HdQ)
 
-[Dragon Demo Video](https://www.youtube.com/watch?v=iqLyLICHI1Y)
+[![Dragon Demo Video](https://img.youtube.com/vi/iqLyLICHI1Y/0.jpg)](https://www.youtube.com/watch?v=iqLyLICHI1Y)
+
+### Example Renders
 
 ![Example 1](dino/example_renders/colonial_1800_6m.png)
 ![Example 2](dino/example_renders/focused_caustics_4500_6m.png)
